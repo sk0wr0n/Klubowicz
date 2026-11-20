@@ -35,6 +35,22 @@ interface PreviewRow {
   reason: string | null;
   duplicate: boolean;
   selected: boolean;
+  rememberAlias: boolean;
+}
+
+/** Z nadawcy przelewu („JAN KOWALSKI UL. LIPOWA 7 …”) wyciąga samo imię i nazwisko jako alias. */
+function aliasFromSender(sender: string): string {
+  const out: string[] = [];
+  for (const tok of sender.trim().split(/\s+/)) {
+    if (/\d/.test(tok) || /^(ul|al|os|pl|ulica|aleja)\.?$/i.test(tok)) break;
+    out.push(tok);
+    if (out.length >= 4) break;
+  }
+  return out
+    .join(' ')
+    .toLowerCase()
+    .replace(/(^|[\s-])(\p{L})/gu, (_m, a: string, b: string) => a + b.toUpperCase())
+    .trim();
 }
 
 const FIELDS: { key: keyof ColumnMap; label: string; required: boolean }[] = [
@@ -141,6 +157,7 @@ export default function ImportPage() {
           reason: m?.reason ?? null,
           duplicate: false,
           selected: Boolean(m),
+          rememberAlias: false,
         });
       }
       const { data } = await supabase().rpc('check_bank_hashes', {
@@ -190,7 +207,30 @@ export default function ImportPage() {
       return;
     }
     const res = data as { inserted: number; skipped: number };
-    toast(`Zaksięgowano ${res.inserted} wpłat${res.skipped ? `, pominięto ${res.skipped} (duplikaty)` : ''}.`);
+
+    // zapamiętaj nadawców ręcznie przypisanych przelewów jako aliasy zawodników
+    const aliasAdds = new Map<string, Set<string>>();
+    for (const p of toBook) {
+      if (!p.rememberAlias || p.reason !== 'ręcznie') continue;
+      const alias = aliasFromSender(p.sender);
+      if (alias.length < 3) continue;
+      if (!aliasAdds.has(p.userId)) aliasAdds.set(p.userId, new Set());
+      aliasAdds.get(p.userId)!.add(alias);
+    }
+    let aliasCount = 0;
+    for (const [uid, adds] of aliasAdds) {
+      const m = members.find((x) => x.user_id === uid);
+      if (!m) continue;
+      const merged = Array.from(new Set([...(m.aliases ?? []), ...adds]));
+      if (merged.length === (m.aliases ?? []).length) continue;
+      const { error: aErr } = await supabase().rpc('set_member_aliases', { p_member_id: m.member_id, p_aliases: merged });
+      if (!aErr) aliasCount += merged.length - (m.aliases ?? []).length;
+    }
+
+    toast(
+      `Zaksięgowano ${res.inserted} wpłat${res.skipped ? `, pominięto ${res.skipped} (duplikaty)` : ''}.` +
+        (aliasCount ? ` Zapamiętano nadawców: ${aliasCount}.` : '')
+    );
     const booked = new Set(toBook.map((p) => p.hash));
     setPreview((prev) => prev.map((p) => (booked.has(p.hash) ? { ...p, duplicate: true, selected: false } : p)));
     await reload();
@@ -272,76 +312,128 @@ export default function ImportPage() {
 
       {working && <Spinner className="mx-auto my-6 h-6 w-6 text-indigo-600" />}
 
-      {preview.length > 0 && !working && (
-        <div className="card mb-24 p-0">
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 p-4">
-            <div>
-              <h2 className="font-semibold">Podgląd wpływów ({preview.length})</h2>
-              <p className="text-xs text-slate-500">
-                Dopasowano: {preview.filter((p) => p.userId).length} · duplikaty: {preview.filter((p) => p.duplicate).length}
-                {skippedOut > 0 && ` · pominięto wydatków: ${skippedOut}`}
-              </p>
-            </div>
-          </div>
-          <ul className="divide-y divide-slate-100">
-            {preview.map((p) => (
-              <li key={p.idx} className={`flex flex-col gap-2 p-4 ${p.duplicate ? 'bg-slate-50 opacity-60' : ''}`}>
-                <div className="flex items-start gap-3">
-                  <input
-                    type="checkbox"
-                    className="mt-1 h-5 w-5 accent-indigo-600"
-                    checked={p.selected}
-                    disabled={p.duplicate || !p.userId}
-                    onChange={(e) => update(p.idx, { selected: e.target.checked })}
-                  />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium break-words">{p.title || '(brak tytułu)'}</p>
-                    <p className="text-xs text-slate-500">
-                      {formatDate(p.date)}
-                      {p.sender && ` · ${p.sender}`}
-                    </p>
-                  </div>
-                  <span className="text-sm font-semibold text-emerald-600">+{money(p.amount)}</span>
-                </div>
-                <div className="flex items-center gap-2 pl-8">
-                  <select
-                    className="input py-1.5 text-sm"
-                    value={p.userId}
-                    disabled={p.duplicate}
-                    onChange={(e) => update(p.idx, { userId: e.target.value, selected: Boolean(e.target.value), reason: e.target.value ? 'ręcznie' : null })}
-                  >
-                    <option value="">— nie przypisano —</option>
-                    {members.map((m) => (
-                      <option key={m.user_id} value={m.user_id}>
-                        {m.member_code} {m.full_name ?? m.email}
-                      </option>
-                    ))}
-                  </select>
-                  {p.duplicate ? (
-                    <span className="chip shrink-0 bg-slate-200 text-slate-600">już zaksięgowane</span>
-                  ) : p.reason ? (
-                    <span className="chip shrink-0 bg-emerald-100 text-emerald-700">{p.reason}</span>
-                  ) : null}
-                </div>
-              </li>
-            ))}
-          </ul>
+      {!working && dataRows.length > 0 && preview.length === 0 && (
+        <div className="card mb-4 text-sm text-slate-600">
+          {map.date < 0 || map.amount < 0 || map.title < 0
+            ? 'Wybierz powyżej kolumny Data, Kwota i Tytuł – wtedy pojawi się podgląd wpłat.'
+            : `Nie znaleziono wpływów w tym pliku${skippedOut ? ` (pominięto ${skippedOut} wydatków)` : ''}. Sprawdź mapowanie kolumn.`}
         </div>
       )}
 
-      {preview.length > 0 && (
-        <div className="fixed inset-x-0 bottom-16 z-20 px-4">
-          <div className="mx-auto max-w-3xl">
-            <button
-              className="btn btn-primary w-full py-3 shadow-lg"
-              disabled={toBook.length === 0 || suspended || busy}
-              onClick={() => setConfirm(true)}
-            >
-              <FileUp className="h-5 w-5" /> Zaksięguj {toBook.length} wpłat ({money(toBookSum)})
-            </button>
-          </div>
-        </div>
-      )}
+      {preview.length > 0 && !working && (() => {
+        const unmatched = preview.filter((p) => !p.userId && !p.duplicate).length;
+        const bookButton = (
+          <button
+            className="btn btn-primary w-full py-3"
+            disabled={toBook.length === 0 || suspended || busy}
+            onClick={() => setConfirm(true)}
+          >
+            <FileUp className="h-5 w-5" />
+            {toBook.length > 0 ? `Zaksięguj ${toBook.length} wpłat (${money(toBookSum)})` : 'Zaznacz wpłaty do zaksięgowania'}
+          </button>
+        );
+        return (
+          <>
+            <div className="card mb-3 flex flex-col gap-3">
+              <div>
+                <h2 className="font-semibold">Podgląd wpływów ({preview.length})</h2>
+                <p className="text-xs text-slate-500">
+                  Rozpoznane: {preview.filter((p) => p.userId && !p.duplicate).length} · do przypisania: {unmatched} · już
+                  zaksięgowane: {preview.filter((p) => p.duplicate).length}
+                  {skippedOut > 0 && ` · pominięto wydatków: ${skippedOut}`}
+                </p>
+              </div>
+              {unmatched > 0 && (
+                <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                  Przelewy oznaczone na pomarańczowo nie mają rozpoznanego zawodnika (np. brak kodu w tytule). Wybierz osobę z
+                  listy „Przypisz do zawodnika” – albo zostaw nieprzypisane, jeśli to nie jest wpłata za treningi.
+                </p>
+              )}
+              {bookButton}
+            </div>
+
+            <div className="card mb-3 p-0">
+              <ul className="divide-y divide-slate-100">
+                {preview.map((p) => {
+                  const needs = !p.userId && !p.duplicate;
+                  return (
+                    <li
+                      key={p.idx}
+                      className={`flex flex-col gap-2 p-4 ${p.duplicate ? 'bg-slate-50 opacity-60' : needs ? 'bg-amber-50' : ''}`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <input
+                          type="checkbox"
+                          className="mt-1 h-5 w-5 shrink-0 accent-indigo-600"
+                          checked={p.selected}
+                          disabled={p.duplicate || !p.userId}
+                          onChange={(e) => update(p.idx, { selected: e.target.checked })}
+                          aria-label="Księguj tę wpłatę"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p className="break-words text-sm font-medium">{p.title || '(brak tytułu)'}</p>
+                          <p className="break-words text-xs text-slate-500">
+                            {formatDate(p.date)}
+                            {p.sender && ` · ${p.sender}`}
+                          </p>
+                        </div>
+                        <span className="shrink-0 text-sm font-semibold text-emerald-600">+{money(p.amount)}</span>
+                      </div>
+
+                      {p.duplicate ? (
+                        <span className="chip ml-8 self-start bg-slate-200 text-slate-600">już zaksięgowane</span>
+                      ) : (
+                        <div className="ml-8 flex flex-col gap-1.5">
+                          <label className={`text-xs font-semibold ${needs ? 'text-amber-800' : 'text-slate-500'}`}>
+                            {needs ? 'Przypisz do zawodnika:' : 'Zawodnik:'}
+                            {p.reason && (
+                              <span className="chip ml-2 bg-emerald-100 font-medium text-emerald-700">
+                                {p.reason === 'ręcznie' ? 'przypisano ręcznie' : `rozpoznano: ${p.reason}`}
+                              </span>
+                            )}
+                          </label>
+                          <select
+                            className={`input py-2 text-sm ${needs ? 'border-amber-300' : ''}`}
+                            value={p.userId}
+                            onChange={(e) =>
+                              update(p.idx, {
+                                userId: e.target.value,
+                                selected: Boolean(e.target.value),
+                                reason: e.target.value ? 'ręcznie' : null,
+                                rememberAlias: Boolean(e.target.value) && Boolean(aliasFromSender(p.sender)),
+                              })
+                            }
+                          >
+                            <option value="">— nie przypisuj —</option>
+                            {members.map((m) => (
+                              <option key={m.user_id} value={m.user_id}>
+                                {m.member_code} {m.full_name ?? m.email}
+                              </option>
+                            ))}
+                          </select>
+                          {p.reason === 'ręcznie' && aliasFromSender(p.sender) && (
+                            <label className="flex items-center gap-2 text-xs text-slate-600">
+                              <input
+                                type="checkbox"
+                                className="h-4 w-4 accent-indigo-600"
+                                checked={p.rememberAlias}
+                                onChange={(e) => update(p.idx, { rememberAlias: e.target.checked })}
+                              />
+                              Zapamiętaj nadawcę „{aliasFromSender(p.sender)}” – kolejne przelewy przypiszą się same
+                            </label>
+                          )}
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+
+            <div className="mb-4">{bookButton}</div>
+          </>
+        );
+      })()}
 
       <ConfirmModal
         open={confirm}
