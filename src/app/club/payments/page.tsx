@@ -6,13 +6,14 @@ import { useClub } from '@/lib/club';
 import { errMsg, supabase } from '@/lib/supabase';
 import { currentPeriod, money, periodLabel, todayInput } from '@/lib/format';
 import type { AdminMember, Transaction } from '@/lib/types';
+import BalanceUpdateInfo from '@/components/BalanceUpdateInfo';
 import OwnerGuard from '@/components/OwnerGuard';
 import TransactionList from '@/components/TransactionList';
 import { useToast } from '@/components/Toast';
 import { Avatar, ConfirmModal, ErrorBox, Modal, PageTitle, Spinner } from '@/components/ui';
 
 export default function PaymentsPage() {
-  const { clubId, ctx, suspended } = useClub();
+  const { clubId, ctx, suspended, reload } = useClub();
   const toast = useToast();
   const [members, setMembers] = useState<AdminMember[]>([]);
   const [loading, setLoading] = useState(true);
@@ -105,6 +106,7 @@ export default function PaymentsPage() {
     setPayAmount('');
     setPayDesc('');
     await load();
+    await reload();
     if (historyOf?.user_id === payUser) await loadHistory(historyOf);
   }
 
@@ -118,6 +120,7 @@ export default function PaymentsPage() {
     else {
       toast('Usunięto operację.');
       await load();
+      await reload();
       if (historyOf) await loadHistory(historyOf);
     }
   }
@@ -126,6 +129,7 @@ export default function PaymentsPage() {
     <OwnerGuard>
       <PageTitle title="Rozliczenia" subtitle={`Łączne zadłużenie: ${money(totalDebt)}`} />
       {error && <ErrorBox message={error} />}
+      <BalanceUpdateInfo className="mb-4" />
 
       <div className="mb-4 grid gap-3 sm:grid-cols-2">
         <div className="card flex flex-col gap-2">

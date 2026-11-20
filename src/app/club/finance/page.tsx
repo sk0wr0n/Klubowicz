@@ -7,6 +7,7 @@ import { useClub } from '@/lib/club';
 import { errMsg, supabase } from '@/lib/supabase';
 import { money } from '@/lib/format';
 import { BILLING_LABEL, type Transaction } from '@/lib/types';
+import BalanceUpdateInfo from '@/components/BalanceUpdateInfo';
 import CopyField from '@/components/CopyField';
 import TransactionList from '@/components/TransactionList';
 import { ErrorBox, PageTitle, Spinner } from '@/components/ui';
@@ -61,6 +62,8 @@ export default function FinancePage() {
           </p>
         )}
       </div>
+
+      <BalanceUpdateInfo className="mb-4" />
 
       <div className="card mb-4 flex flex-col gap-3">
         <h2 className="flex items-center gap-2 font-semibold">

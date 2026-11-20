@@ -678,7 +678,14 @@ begin
     'my_member_code', v_member.member_code,
     'my_billing_mode', v_member.billing_mode,
     'subscription_status', v_status,
-    'is_superadmin', v_is_sa
+    'is_superadmin', v_is_sa,
+    -- kiedy ostatnio księgowano wpłaty/korekty (import CSV lub ręcznie) i do jakiego dnia sięga import z banku
+    'balances_updated_at', (select max(t.created_at) from public.transactions t
+                            where t.club_id = p_club and t.type in ('payment', 'adjustment')),
+    'last_import_at', (select max(t.created_at) from public.transactions t
+                       where t.club_id = p_club and t.bank_hash is not null),
+    'bank_data_until', (select max(t.booked_at) from public.transactions t
+                        where t.club_id = p_club and t.bank_hash is not null)
   );
 
   if v_member.role = 'owner' or v_is_sa then

@@ -59,6 +59,9 @@ export interface ClubContextData {
   my_billing_mode: BillingMode | null;
   subscription_status: SubStatus;
   is_superadmin: boolean;
+  balances_updated_at?: string | null;
+  last_import_at?: string | null;
+  bank_data_until?: string | null;
   platform?: PlatformInfo;
   pending_members?: number;
 }

@@ -7,6 +7,7 @@ import { errMsg, supabase } from '@/lib/supabase';
 import { normalize } from '@/lib/csv';
 import { formatDate, money } from '@/lib/format';
 import { ROLE_LABEL, type TeamMember, type Transaction } from '@/lib/types';
+import BalanceUpdateInfo from '@/components/BalanceUpdateInfo';
 import TransactionList from '@/components/TransactionList';
 import { Avatar, EmptyState, ErrorBox, Modal, PageTitle, Spinner } from '@/components/ui';
 
@@ -62,6 +63,7 @@ export default function TeamPage() {
         subtitle={`Członków: ${list.length}${inDebt ? ` · do zapłaty ma ${inDebt} os.` : ' · wszyscy rozliczeni'}`}
       />
       {error && <ErrorBox message={error} />}
+      <BalanceUpdateInfo className="mb-3" />
 
       <div className="mb-3 flex flex-col gap-2">
         <input className="input" placeholder="Szukaj po nazwisku lub kodzie…" value={q} onChange={(e) => setQ(e.target.value)} />

@@ -46,7 +46,7 @@ const FIELDS: { key: keyof ColumnMap; label: string; required: boolean }[] = [
 ];
 
 export default function ImportPage() {
-  const { clubId, ctx, suspended } = useClub();
+  const { clubId, ctx, suspended, reload } = useClub();
   const toast = useToast();
   const [members, setMembers] = useState<AdminMember[]>([]);
   const [encoding, setEncoding] = useState<CsvEncoding>('auto');
@@ -193,6 +193,7 @@ export default function ImportPage() {
     toast(`Zaksięgowano ${res.inserted} wpłat${res.skipped ? `, pominięto ${res.skipped} (duplikaty)` : ''}.`);
     const booked = new Set(toBook.map((p) => p.hash));
     setPreview((prev) => prev.map((p) => (booked.has(p.hash) ? { ...p, duplicate: true, selected: false } : p)));
+    await reload();
     const { data: fresh } = await supabase().rpc('admin_list_members', { p_club: clubId });
     setMembers(((fresh ?? []) as AdminMember[]).filter((m) => m.status !== 'pending'));
   }
