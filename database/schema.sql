@@ -53,6 +53,11 @@ create table if not exists public.clubs (
   created_at                  timestamptz not null default now()
 );
 
+-- Automatyczne naliczanie składek miesięcznych (1. dnia miesiąca, harmonogram pg_cron)
+alter table public.clubs add column if not exists auto_monthly_fee boolean not null default false;
+alter table public.clubs add column if not exists auto_monthly_fee_from text
+  check (auto_monthly_fee_from is null or auto_monthly_fee_from ~ '^[0-9]{4}-(0[1-9]|1[0-2])$');
+
 -- Członkostwo w klubie + rola w klubie
 create table if not exists public.club_members (
   id           uuid primary key default gen_random_uuid(),
@@ -1275,6 +1280,38 @@ begin
     order by t.booked_at desc, t.created_at desc;
 end $$;
 
+-- ---------- Automatyczne składki (harmonogram) ----------
+
+-- Systemowe naliczenie składek – wywoływane przez pg_cron, niedostępne dla użytkowników
+create or replace function public._system_charge_monthly_fees(p_period text default null)
+returns integer language plpgsql volatile security definer set search_path = public as $$
+declare
+  v_period text := coalesce(p_period, to_char(now() at time zone 'Europe/Warsaw', 'YYYY-MM'));
+  v_total integer := 0;
+  v_n integer;
+  c record;
+begin
+  for c in
+    select * from public.clubs
+    where auto_monthly_fee and monthly_fee_amount > 0
+      and (auto_monthly_fee_from is null or v_period >= auto_monthly_fee_from)
+  loop
+    if public._refresh_subscription(c.id) = 'suspended' then
+      continue;
+    end if;
+    insert into public.transactions (club_id, user_id, amount, type, description, period, booked_at, created_by)
+    select c.id, m.user_id, -c.monthly_fee_amount, 'monthly_fee',
+           'Składka miesięczna ' || substr(v_period, 6, 2) || '/' || substr(v_period, 1, 4),
+           v_period, to_date(v_period || '-01', 'YYYY-MM-DD'), null
+    from public.club_members m
+    where m.club_id = c.id and m.status = 'active' and m.billing_mode = 'monthly'
+    on conflict do nothing;
+    get diagnostics v_n = row_count;
+    v_total := v_total + v_n;
+  end loop;
+  return v_total;
+end $$;
+
 -- ---------- Finanse klubu (Właściciel) ----------
 
 create or replace function public.charge_monthly_fees(p_club uuid, p_period text)
@@ -1667,6 +1704,16 @@ grant execute on function public.sa_charge_all(text) to authenticated;
 grant execute on function public.sa_mark_paid(uuid) to authenticated;
 grant execute on function public.sa_set_status(uuid, text) to authenticated;
 grant execute on function public.sa_void_invoice(uuid) to authenticated;
+
+-- Harmonogram: 1. dnia miesiąca o 05:00 UTC (06:00 zimą / 07:00 latem w Polsce)
+do $$
+begin
+  if exists (select 1 from pg_available_extensions where name = 'pg_cron') then
+    create extension if not exists pg_cron;
+    perform cron.unschedule(jobid) from cron.job where jobname = 'klubowicz-monthly-fees';
+    perform cron.schedule('klubowicz-monthly-fees', '0 5 1 * *', 'select public._system_charge_monthly_fees()');
+  end if;
+end $$;
 
 -- Realtime (opcjonalnie): odświeżanie listy zapisów na żywo. Bezpieczne – Realtime respektuje RLS.
 do $$

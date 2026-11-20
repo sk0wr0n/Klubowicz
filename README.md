@@ -79,6 +79,8 @@ Lokalnie linki zaproszeń otwieraj w formie `http://localhost:3000/join/?code=VC
 ## Zasady rozliczeń
 
 - **Abonament (`monthly`)** – Właściciel klika „Nalicz składkę za [miesiąc]”; ponowne naliczenie tego samego miesiąca jest zablokowane w bazie.
+- **Automatyczne składki** – gdy w klubie `auto_monthly_fee = true`, harmonogram `pg_cron` (`klubowicz-monthly-fees`) nalicza składkę 1. dnia każdego miesiąca o 05:00 UTC (od miesiąca `auto_monthly_fee_from`); klub zawieszony jest pomijany.
+- **Wybór trybu przez zawodnika** – przy dołączaniu i później w „Finanse”; każda zmiana trafia do `billing_mode_changes` (historia widoczna dla zawodnika i Właściciela).
 - **Za trening (`per_session`)** – przy zapisie gracz widzi ostrzeżenie o kwocie. Po treningu Opiekun zaznacza obecnych (może dopisać osoby niezapisane w aplikacji) i klika **„Zatwierdź obecność”** – system sam obciąża faktycznie obecnych graczy `per_session`; abonenci (`monthly`) nie płacą za trening. Ekran obecności celowo nie pokazuje kwot.
 - **Status obecności** – Opiekun i Właściciel widzą przy minionych treningach oznaczenie „Obecność niesprawdzona” / „✓ Obecność sprawdzona” oraz sekcję „Obecność do sprawdzenia”.
 - **Późne wypisanie** – gracz `per_session`, który wypisze się później niż `cancellation_deadline_hours` przed treningiem, trafia na listę „wypisani po terminie”; Opiekun decyduje przy rozliczeniu, czy naliczyć opłatę.
