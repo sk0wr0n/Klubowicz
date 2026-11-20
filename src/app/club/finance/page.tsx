@@ -1,19 +1,40 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Landmark } from 'lucide-react';
+import { CalendarDays, Landmark, Ticket } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { useClub } from '@/lib/club';
 import { errMsg, supabase } from '@/lib/supabase';
 import { money } from '@/lib/format';
-import { BILLING_LABEL, type Transaction } from '@/lib/types';
+import { BILLING_LABEL, type BillingMode, type Transaction } from '@/lib/types';
 import BalanceUpdateInfo from '@/components/BalanceUpdateInfo';
+import BillingModeHistory from '@/components/BillingModeHistory';
+import { useToast } from '@/components/Toast';
 import CopyField from '@/components/CopyField';
 import TransactionList from '@/components/TransactionList';
-import { ErrorBox, PageTitle, Spinner } from '@/components/ui';
+import { ConfirmModal, ErrorBox, PageTitle, Spinner } from '@/components/ui';
 
 export default function FinancePage() {
-  const { clubId, ctx } = useClub();
+  const { clubId, ctx, reload, nameOf } = useClub();
+  const toast = useToast();
+  const [switchTo, setSwitchTo] = useState<BillingMode | null>(null);
+  const [switching, setSwitching] = useState(false);
+  const [historyKey, setHistoryKey] = useState(0);
+
+  async function changeMode() {
+    if (!switchTo) return;
+    setSwitching(true);
+    const { error } = await supabase().rpc('set_my_billing_mode', { p_club: clubId, p_mode: switchTo });
+    setSwitching(false);
+    if (error) {
+      toast(errMsg(error), 'error');
+      return;
+    }
+    toast(`Zmieniono sposób rozliczeń na: ${BILLING_LABEL[switchTo]}.`);
+    setSwitchTo(null);
+    await reload();
+    setHistoryKey((k) => k + 1);
+  }
   const { userId, profile } = useAuth();
   const [items, setItems] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
@@ -53,15 +74,48 @@ export default function FinancePage() {
         <p className={`text-sm ${balance < 0 ? 'text-red-700' : 'text-emerald-700'}`}>
           {balance < 0 ? `Do zapłaty: ${money(due)}` : balance > 0 ? 'Nadpłata – masz środki na kolejne treningi' : 'Wszystko rozliczone'}
         </p>
-        {ctx.my_billing_mode && (
-          <p className="mt-2 text-xs text-slate-500">
-            Tryb rozliczeń: {BILLING_LABEL[ctx.my_billing_mode]}
-            {ctx.my_billing_mode === 'monthly'
-              ? ` (${money(ctx.club.monthly_fee_amount)} / mies.)`
-              : ` (${money(ctx.club.single_training_fee_amount)} / trening)`}
-          </p>
-        )}
       </div>
+
+      {ctx.my_billing_mode && userId && (
+        <div className="card mb-4 flex flex-col gap-3">
+          <h2 className="font-semibold">Sposób rozliczeń</h2>
+          <div className="grid grid-cols-2 gap-2">
+            {(
+              [
+                { key: 'per_session', icon: Ticket, title: 'Za trening', price: `${money(ctx.club.single_training_fee_amount)} / trening` },
+                { key: 'monthly', icon: CalendarDays, title: 'Abonament', price: `${money(ctx.club.monthly_fee_amount)} / mies.` },
+              ] as { key: BillingMode; icon: typeof Ticket; title: string; price: string }[]
+            ).map((o) => {
+              const Icon = o.icon;
+              const active = ctx.my_billing_mode === o.key;
+              return (
+                <button
+                  key={o.key}
+                  type="button"
+                  disabled={active}
+                  onClick={() => setSwitchTo(o.key)}
+                  className={`flex flex-col items-start gap-1 rounded-xl border p-3 text-left transition ${
+                    active ? 'border-indigo-500 bg-indigo-50 ring-2 ring-indigo-200' : 'border-slate-200 bg-white hover:border-indigo-300'
+                  }`}
+                >
+                  <Icon className={`h-5 w-5 ${active ? 'text-indigo-600' : 'text-slate-400'}`} />
+                  <span className="text-sm font-semibold">{o.title}</span>
+                  <span className="text-xs text-slate-500">{o.price}</span>
+                  <span className={`text-[11px] font-semibold ${active ? 'text-indigo-700' : 'text-slate-400'}`}>
+                    {active ? '✓ Twój obecny wybór' : 'Kliknij, aby zmienić'}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          <details className="text-sm">
+            <summary className="cursor-pointer text-xs font-semibold text-slate-500">Historia zmian</summary>
+            <div className="mt-2">
+              <BillingModeHistory clubId={clubId} userId={userId} nameOf={nameOf} refreshKey={historyKey} />
+            </div>
+          </details>
+        </div>
+      )}
 
       <BalanceUpdateInfo className="mb-4" />
 
@@ -84,6 +138,30 @@ export default function FinancePage() {
           <p className="text-sm text-slate-500">Właściciel klubu nie podał jeszcze numeru konta.</p>
         )}
       </div>
+
+      <ConfirmModal
+        open={switchTo !== null}
+        title="Zmienić sposób rozliczeń?"
+        message={
+          switchTo === 'monthly' ? (
+            <>
+              Przechodzisz na <strong>abonament miesięczny</strong> ({money(ctx.club.monthly_fee_amount)} / mies.). Treningi nie
+              będą już osobno obciążać Twojego salda, a składka będzie naliczana co miesiąc. Zmiana działa od razu i zostanie
+              zapisana w historii.
+            </>
+          ) : (
+            <>
+              Przechodzisz na <strong>płatność za trening</strong> ({money(ctx.club.single_training_fee_amount)} / trening).
+              Będziesz płacić za każdy trening, na którym zostanie potwierdzona Twoja obecność. Zmiana działa od razu i
+              zostanie zapisana w historii.
+            </>
+          )
+        }
+        confirmText="Zmień"
+        busy={switching}
+        onConfirm={() => void changeMode()}
+        onClose={() => setSwitchTo(null)}
+      />
 
       <div className="card">
         <h2 className="mb-1 font-semibold">Historia wpłat i obciążeń</h2>

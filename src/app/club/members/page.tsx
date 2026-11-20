@@ -6,12 +6,14 @@ import { useClub } from '@/lib/club';
 import { errMsg, supabase } from '@/lib/supabase';
 import { money } from '@/lib/format';
 import { BILLING_LABEL, ROLE_LABEL, type AdminMember, type BillingMode } from '@/lib/types';
+import BillingModeHistory from '@/components/BillingModeHistory';
 import OwnerGuard from '@/components/OwnerGuard';
 import { useToast } from '@/components/Toast';
 import { Avatar, ConfirmModal, ErrorBox, PageTitle, Spinner } from '@/components/ui';
 
 export default function MembersPage() {
-  const { clubId, reload: reloadCtx, reloadMembers } = useClub();
+  const { clubId, reload: reloadCtx, reloadMembers, nameOf } = useClub();
+  const [historyKey, setHistoryKey] = useState(0);
   const toast = useToast();
   const [list, setList] = useState<AdminMember[]>([]);
   const [loading, setLoading] = useState(true);
@@ -41,6 +43,7 @@ export default function MembersPage() {
       return false;
     }
     toast(ok);
+    setHistoryKey((k) => k + 1);
     await load();
     await reloadMembers();
     await reloadCtx();
@@ -156,6 +159,15 @@ export default function MembersPage() {
                       ))}
                     </select>
                   </div>
+
+                  <details className="rounded-xl bg-slate-50 p-3">
+                    <summary className="cursor-pointer text-xs font-semibold text-slate-600">
+                      Historia zmian trybu rozliczeń
+                    </summary>
+                    <div className="mt-2">
+                      <BillingModeHistory clubId={clubId} userId={m.user_id} nameOf={nameOf} refreshKey={historyKey} />
+                    </div>
+                  </details>
 
                   {m.role !== 'owner' && (
                     <label className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 p-3">

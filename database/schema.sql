@@ -491,6 +491,37 @@ create trigger trainings_rebalance
   after update of max_participants on public.trainings
   for each row execute function public.trainings_after_update();
 
+-- Historia zmian trybu rozliczeń (abonament / za trening) – zapisywana automatycznie
+create table if not exists public.billing_mode_changes (
+  id         uuid primary key default gen_random_uuid(),
+  club_id    uuid not null references public.clubs (id) on delete cascade,
+  user_id    uuid not null references public.profiles (id) on delete cascade,
+  old_mode   text check (old_mode in ('monthly', 'per_session')),
+  new_mode   text not null check (new_mode in ('monthly', 'per_session')),
+  changed_by uuid references public.profiles (id) on delete set null,
+  changed_at timestamptz not null default now()
+);
+create index if not exists billing_mode_changes_member_idx
+  on public.billing_mode_changes (club_id, user_id, changed_at desc);
+
+create or replace function public.log_billing_mode_change()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if tg_op = 'INSERT' then
+    insert into public.billing_mode_changes (club_id, user_id, old_mode, new_mode, changed_by)
+    values (new.club_id, new.user_id, null, new.billing_mode, auth.uid());
+  elsif new.billing_mode is distinct from old.billing_mode then
+    insert into public.billing_mode_changes (club_id, user_id, old_mode, new_mode, changed_by)
+    values (new.club_id, new.user_id, old.billing_mode, new.billing_mode, auth.uid());
+  end if;
+  return null;
+end $$;
+
+drop trigger if exists club_members_billing_log on public.club_members;
+create trigger club_members_billing_log
+  after insert or update of billing_mode on public.club_members
+  for each row execute function public.log_billing_mode_change();
+
 -- =====================================================================
 -- 4. ROW LEVEL SECURITY
 -- =====================================================================
@@ -505,6 +536,12 @@ alter table public.transactions           enable row level security;
 alter table public.platform_subscriptions enable row level security;
 alter table public.platform_invoices      enable row level security;
 alter table public.platform_settings      enable row level security;
+alter table public.billing_mode_changes   enable row level security;
+
+-- BILLING_MODE_CHANGES: własna historia; Opiekun/Właściciel – historia członków klubu
+drop policy if exists billing_mode_changes_select on public.billing_mode_changes;
+create policy billing_mode_changes_select on public.billing_mode_changes for select to authenticated
+  using (user_id = auth.uid() or public.is_club_staff(club_id) or public.is_superadmin());
 
 -- PROFILES: własny profil, osoby z moich klubów, Superadmin – wszystko
 drop policy if exists profiles_select on public.profiles;
@@ -605,27 +642,68 @@ language sql stable security definer set search_path = public as $$
   order by c.name;
 $$;
 
-create or replace function public.join_club_by_code(p_code text)
+-- Informacje o klubie z zaproszenia (przed dołączeniem): nazwa i stawki do wyboru trybu rozliczeń
+create or replace function public.invite_info(p_code text)
+returns table (club_id uuid, club_name text, monthly_fee_amount numeric, single_training_fee_amount numeric, my_status text)
+language plpgsql stable security definer set search_path = public as $$
+declare
+  v_uid uuid := public._require_uid();
+begin
+  return query
+    select c.id, c.name, c.monthly_fee_amount, c.single_training_fee_amount,
+           (select m.status from public.club_members m where m.club_id = c.id and m.user_id = v_uid)
+    from public.clubs c
+    where c.invite_code = upper(trim(p_code));
+  if not found then
+    raise exception 'Nieprawidłowy lub nieaktualny link zapraszający.';
+  end if;
+end $$;
+
+-- Dołączenie do klubu z wyborem trybu rozliczeń (abonament / za trening)
+drop function if exists public.join_club_by_code(text);
+create or replace function public.join_club_by_code(p_code text, p_billing_mode text default null)
 returns table (club_id uuid, club_name text, status text)
 language plpgsql volatile security definer set search_path = public as $$
 declare
   v_uid  uuid := public._require_uid();
   v_club public.clubs%rowtype;
   v_status text;
+  v_mode text := nullif(trim(coalesce(p_billing_mode, '')), '');
 begin
+  if v_mode is not null and v_mode not in ('monthly', 'per_session') then
+    raise exception 'Nieprawidłowy tryb rozliczeń.';
+  end if;
   select * into v_club from public.clubs where invite_code = upper(trim(p_code));
   if not found then
     raise exception 'Nieprawidłowy lub nieaktualny link zapraszający.';
   end if;
 
-  insert into public.club_members (club_id, user_id, role, status)
-  values (v_club.id, v_uid, 'member', 'pending')
+  insert into public.club_members (club_id, user_id, role, status, billing_mode)
+  values (v_club.id, v_uid, 'member', 'pending', coalesce(v_mode, 'per_session'))
   on conflict on constraint club_members_club_id_user_id_key do update
     set status = case when public.club_members.status = 'removed' then 'pending'
-                      else public.club_members.status end
+                      else public.club_members.status end,
+        billing_mode = case when public.club_members.status in ('pending', 'removed') and v_mode is not null
+                            then v_mode else public.club_members.billing_mode end
   returning public.club_members.status into v_status;
 
   return query select v_club.id, v_club.name, v_status;
+end $$;
+
+-- Zawodnik sam zmienia swój tryb rozliczeń (zmiana od razu, zapis w historii przez trigger)
+create or replace function public.set_my_billing_mode(p_club uuid, p_mode text)
+returns void language plpgsql volatile security definer set search_path = public as $$
+declare
+  v_uid uuid := public._require_uid();
+begin
+  if p_mode not in ('monthly', 'per_session') then
+    raise exception 'Nieprawidłowy tryb rozliczeń.';
+  end if;
+  update public.club_members set billing_mode = p_mode
+  where club_id = p_club and user_id = v_uid and status in ('active', 'pending');
+  if not found then
+    raise exception 'Nie jesteś członkiem tego klubu.' using errcode = '42501';
+  end if;
 end $$;
 
 -- Kontekst klubu dla aplikacji (rola, ustawienia, status subskrypcji, baner zaległości)
@@ -1541,6 +1619,7 @@ grant select on public.member_balances to authenticated;
 grant select on public.platform_subscriptions to authenticated;
 grant select on public.platform_invoices to authenticated;
 grant select on public.platform_settings to authenticated;
+grant select on public.billing_mode_changes to authenticated;
 grant update (platform_name, bank_account, bank_recipient, contact_email, updated_at) on public.platform_settings to authenticated;
 
 -- funkcje używane w politykach RLS
@@ -1553,7 +1632,9 @@ grant execute on function public.shares_club_with(uuid) to authenticated;
 
 -- publiczne RPC (każda sama sprawdza uprawnienia)
 grant execute on function public.my_memberships() to authenticated;
-grant execute on function public.join_club_by_code(text) to authenticated;
+grant execute on function public.invite_info(text) to authenticated;
+grant execute on function public.join_club_by_code(text, text) to authenticated;
+grant execute on function public.set_my_billing_mode(uuid, text) to authenticated;
 grant execute on function public.club_context(uuid) to authenticated;
 grant execute on function public.admin_list_members(uuid) to authenticated;
 grant execute on function public.approve_member(uuid) to authenticated;
