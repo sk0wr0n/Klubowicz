@@ -12,6 +12,7 @@ import CalendarView from '@/components/CalendarView';
 import TrainingCard from '@/components/TrainingCard';
 import TrainingFormModal from '@/components/TrainingFormModal';
 import { EmptyState, ErrorBox, PageTitle, Spinner } from '@/components/ui';
+import { InstallBanner } from '@/components/InstallHelp';
 
 const SELECT =
   'id, club_id, title, location, starts_at, ends_at, max_participants, notes, status, settled_at, training_signups(user_id, status)';
@@ -114,6 +115,8 @@ export default function TrainingsPage() {
           ) : undefined
         }
       />
+
+      <InstallBanner />
 
       <div className="mb-4 grid grid-cols-2 rounded-xl bg-slate-100 p-1 text-sm font-semibold">
         <button

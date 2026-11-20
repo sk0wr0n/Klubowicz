@@ -7,6 +7,7 @@ import { useAuth } from '@/lib/auth';
 import { errMsg, isGoogleEnabled, supabase } from '@/lib/supabase';
 import { peekNext, popNext } from '@/lib/nav';
 import { ErrorBox, Spinner } from '@/components/ui';
+import { openInstallHelp } from '@/components/InstallHelp';
 
 function GoogleIcon() {
   return (
@@ -167,6 +168,10 @@ export default function LoginPage() {
           </>
         )}
       </div>
+
+      <button className="text-center text-sm font-medium text-indigo-600" onClick={openInstallHelp}>
+        📲 Jak dodać aplikację do ekranu głównego telefonu?
+      </button>
 
       <p className="text-center text-xs text-slate-400">
         Nie przechowujemy haseł. Logowanie odbywa się jednorazowym linkiem wysyłanym na e-mail.

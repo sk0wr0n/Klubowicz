@@ -3,6 +3,7 @@
 import { useEffect, type ReactNode } from 'react';
 import { AuthProvider, useAuth } from '@/lib/auth';
 import { ToastProvider } from './Toast';
+import { InstallHelpRoot } from './InstallHelp';
 import { FullScreenLoader } from './ui';
 
 function ConfigGate({ children }: { children: ReactNode }) {
@@ -38,6 +39,7 @@ export default function Providers({ children }: { children: ReactNode }) {
     <ToastProvider>
       <AuthProvider>
         <ServiceWorkerRegistrar />
+        <InstallHelpRoot />
         <ConfigGate>{children}</ConfigGate>
       </AuthProvider>
     </ToastProvider>
