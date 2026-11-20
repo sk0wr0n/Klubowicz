@@ -1,0 +1,50 @@
+# =====================================================================
+#  KLUBOWICZ – konfiguracja Apache dla hostingu WWW OVH
+#  Ten plik trafia do katalogu "www" razem z resztą zbudowanej aplikacji.
+# =====================================================================
+
+Options -Indexes
+DirectoryIndex index.html
+AddDefaultCharset UTF-8
+AddType application/manifest+json .webmanifest
+AddType application/json .json
+AddType text/javascript .js .mjs
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+
+  # 1) Wymuś HTTPS (PWA i logowanie Google wymagają HTTPS)
+  RewriteCond %{HTTPS} !=on
+  RewriteCond %{HTTP:X-Forwarded-Proto} !https
+  RewriteRule ^(.*)$ https://%{HTTP_HOST}/$1 [R=301,L]
+
+  # 2) Zablokuj dostęp do plików ukrytych i roboczych (np. .env, .git), poza .well-known
+  RewriteRule "(^|/)\.(?!well-known)" - [F]
+  RewriteRule \.(sql|csv|md|env|log|zip|bak)$ - [F,NC]
+
+  # 3) Linki zapraszające /join/KOD obsługuje statyczna strona /join/
+  RewriteRule ^join/([A-Za-z0-9_-]+)/?$ /join/index.html [L]
+</IfModule>
+
+ErrorDocument 404 /404.html
+
+<IfModule mod_headers.c>
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set X-Frame-Options "DENY"
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+  Header always set Permissions-Policy "camera=(), microphone=(), geolocation=()"
+  Header always set Strict-Transport-Security "max-age=31536000" env=HTTPS
+
+  # Pliki z hashem w nazwie – długi cache
+  <FilesMatch "\.(js|css|woff2?|png|svg|ico)$">
+    Header set Cache-Control "public, max-age=31536000, immutable"
+  </FilesMatch>
+  # HTML, konfiguracja, manifest i service worker – zawsze świeże
+  <FilesMatch "(\.html|config\.js|sw\.js|manifest\.json)$">
+    Header set Cache-Control "no-cache, must-revalidate"
+  </FilesMatch>
+</IfModule>
+
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/html text/css text/javascript application/javascript application/json application/manifest+json image/svg+xml
+</IfModule>

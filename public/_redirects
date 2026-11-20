@@ -1,0 +1,2 @@
+# Cloudflare Pages / Netlify: linki zapraszające /join/KOD (odpowiednik reguły z .htaccess)
+/join/*  /join/index.html  200

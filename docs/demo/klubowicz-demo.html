@@ -1,0 +1,1645 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Klubowicz – demo aplikacji</title>
+<style>
+/*! tailwindcss v4.3.5 | MIT License | https://tailwindcss.com */
+@layer properties;
+@layer theme, base, components, utilities;
+@layer theme {
+  :root, :host {
+    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
+      "Noto Sans", Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji",
+      "Segoe UI Symbol", "Noto Color Emoji";
+    --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+      "Courier New", monospace;
+    --color-red-50: oklch(97.1% 0.013 17.38);
+    --color-red-100: oklch(93.6% 0.032 17.717);
+    --color-red-200: oklch(88.5% 0.062 18.334);
+    --color-red-500: oklch(63.7% 0.237 25.331);
+    --color-red-600: oklch(57.7% 0.245 27.325);
+    --color-red-700: oklch(50.5% 0.213 27.518);
+    --color-orange-50: oklch(98% 0.016 73.684);
+    --color-orange-600: oklch(64.6% 0.222 41.116);
+    --color-orange-700: oklch(55.3% 0.195 38.402);
+    --color-amber-50: oklch(98.7% 0.022 95.277);
+    --color-amber-100: oklch(96.2% 0.059 95.617);
+    --color-amber-200: oklch(92.4% 0.12 95.746);
+    --color-amber-500: oklch(76.9% 0.188 70.08);
+    --color-amber-600: oklch(66.6% 0.179 58.318);
+    --color-amber-700: oklch(55.5% 0.163 48.998);
+    --color-emerald-50: oklch(97.9% 0.021 166.113);
+    --color-emerald-100: oklch(95% 0.052 163.051);
+    --color-emerald-200: oklch(90.5% 0.093 164.15);
+    --color-emerald-300: oklch(84.5% 0.143 164.978);
+    --color-emerald-500: oklch(69.6% 0.17 162.48);
+    --color-emerald-600: oklch(59.6% 0.145 163.225);
+    --color-emerald-700: oklch(50.8% 0.118 165.612);
+    --color-sky-50: oklch(97.7% 0.013 236.62);
+    --color-sky-100: oklch(95.1% 0.026 236.824);
+    --color-sky-600: oklch(58.8% 0.158 241.966);
+    --color-sky-700: oklch(50% 0.134 242.749);
+    --color-indigo-50: oklch(96.2% 0.018 272.314);
+    --color-indigo-100: oklch(93% 0.034 272.788);
+    --color-indigo-200: oklch(87% 0.065 274.039);
+    --color-indigo-300: oklch(78.5% 0.115 274.713);
+    --color-indigo-500: oklch(58.5% 0.233 277.117);
+    --color-indigo-600: oklch(51.1% 0.262 276.966);
+    --color-indigo-700: oklch(45.7% 0.24 277.023);
+    --color-indigo-800: oklch(39.8% 0.195 277.366);
+    --color-violet-100: oklch(94.3% 0.029 294.588);
+    --color-violet-700: oklch(49.1% 0.27 292.581);
+    --color-slate-50: oklch(98.4% 0.003 247.858);
+    --color-slate-100: oklch(96.8% 0.007 247.896);
+    --color-slate-200: oklch(92.9% 0.013 255.508);
+    --color-slate-300: oklch(86.9% 0.022 252.894);
+    --color-slate-400: oklch(70.4% 0.04 256.788);
+    --color-slate-500: oklch(55.4% 0.046 257.417);
+    --color-slate-600: oklch(44.6% 0.043 257.281);
+    --color-slate-700: oklch(37.2% 0.044 257.287);
+    --color-slate-800: oklch(27.9% 0.041 260.031);
+    --color-slate-900: oklch(20.8% 0.042 265.755);
+    --color-white: #fff;
+    --spacing: 0.25rem;
+    --container-sm: 24rem;
+    --text-xs: 0.75rem;
+    --text-xs--line-height: calc(1 / 0.75);
+    --text-sm: 0.875rem;
+    --text-sm--line-height: calc(1.25 / 0.875);
+    --text-base: 1rem;
+    --text-base--line-height: calc(1.5 / 1);
+    --text-lg: 1.125rem;
+    --text-lg--line-height: calc(1.75 / 1.125);
+    --text-xl: 1.25rem;
+    --text-xl--line-height: calc(1.75 / 1.25);
+    --text-2xl: 1.5rem;
+    --text-2xl--line-height: calc(2 / 1.5);
+    --text-3xl: 1.875rem;
+    --text-3xl--line-height: calc(2.25 / 1.875);
+    --text-4xl: 2.25rem;
+    --text-4xl--line-height: calc(2.5 / 2.25);
+    --font-weight-normal: 400;
+    --font-weight-medium: 500;
+    --font-weight-semibold: 600;
+    --font-weight-bold: 700;
+    --leading-relaxed: 1.625;
+    --radius-lg: 0.5rem;
+    --radius-xl: 0.75rem;
+    --radius-2xl: 1rem;
+    --default-font-family: var(--font-sans);
+    --default-mono-font-family: var(--font-mono);
+  }
+}
+@layer base {
+  *, ::after, ::before, ::backdrop, ::file-selector-button {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    border: 0 solid;
+  }
+  html, :host {
+    line-height: 1.5;
+    -webkit-text-size-adjust: 100%;
+    tab-size: 4;
+    font-family: var(--default-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", "Noto Sans", Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji");
+    font-feature-settings: var(--default-font-feature-settings, normal);
+    font-variation-settings: var(--default-font-variation-settings, normal);
+    -webkit-tap-highlight-color: transparent;
+  }
+  hr {
+    height: 0;
+    color: inherit;
+    border-top-width: 1px;
+  }
+  abbr:where([title]) {
+    -webkit-text-decoration: underline dotted;
+    text-decoration: underline dotted;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    font-size: inherit;
+    font-weight: inherit;
+  }
+  a {
+    color: inherit;
+    -webkit-text-decoration: inherit;
+    text-decoration: inherit;
+  }
+  b, strong {
+    font-weight: bolder;
+  }
+  code, kbd, samp, pre {
+    font-family: var(--default-mono-font-family, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace);
+    font-feature-settings: var(--default-mono-font-feature-settings, normal);
+    font-variation-settings: var(--default-mono-font-variation-settings, normal);
+    font-size: 1em;
+  }
+  small {
+    font-size: 80%;
+  }
+  sub, sup {
+    font-size: 75%;
+    line-height: 0;
+    position: relative;
+    vertical-align: baseline;
+  }
+  sub {
+    bottom: -0.25em;
+  }
+  sup {
+    top: -0.5em;
+  }
+  table {
+    text-indent: 0;
+    border-color: inherit;
+    border-collapse: collapse;
+  }
+  :-moz-focusring:where(:not(iframe)) {
+    outline: auto;
+  }
+  progress {
+    vertical-align: baseline;
+  }
+  summary {
+    display: list-item;
+  }
+  ol, ul, menu {
+    list-style: none;
+  }
+  img, svg, video, canvas, audio, iframe, embed, object {
+    display: block;
+    vertical-align: middle;
+  }
+  img, video {
+    max-width: 100%;
+    height: auto;
+  }
+  button, input, select, optgroup, textarea, ::file-selector-button {
+    font: inherit;
+    font-feature-settings: inherit;
+    font-variation-settings: inherit;
+    letter-spacing: inherit;
+    color: inherit;
+    border-radius: 0;
+    background-color: transparent;
+    opacity: 1;
+  }
+  :where(select:is([multiple], [size])) optgroup {
+    font-weight: bolder;
+  }
+  :where(select:is([multiple], [size])) optgroup option {
+    padding-inline-start: 20px;
+  }
+  ::file-selector-button {
+    margin-inline-end: 4px;
+  }
+  ::placeholder {
+    opacity: 1;
+  }
+  @supports (not (-webkit-appearance: -apple-pay-button))  or (contain-intrinsic-size: 1px) {
+    ::placeholder {
+      color: currentcolor;
+      @supports (color: color-mix(in lab, red, red)) {
+        color: color-mix(in oklab, currentcolor 50%, transparent);
+      }
+    }
+  }
+  textarea {
+    resize: vertical;
+  }
+  ::-webkit-search-decoration {
+    -webkit-appearance: none;
+  }
+  ::-webkit-date-and-time-value {
+    min-height: 1lh;
+    text-align: inherit;
+  }
+  ::-webkit-datetime-edit {
+    display: inline-flex;
+  }
+  ::-webkit-datetime-edit-fields-wrapper {
+    padding: 0;
+  }
+  ::-webkit-datetime-edit, ::-webkit-datetime-edit-year-field, ::-webkit-datetime-edit-month-field, ::-webkit-datetime-edit-day-field, ::-webkit-datetime-edit-hour-field, ::-webkit-datetime-edit-minute-field, ::-webkit-datetime-edit-second-field, ::-webkit-datetime-edit-millisecond-field, ::-webkit-datetime-edit-meridiem-field {
+    padding-block: 0;
+  }
+  ::-webkit-calendar-picker-indicator {
+    line-height: 1;
+  }
+  :-moz-ui-invalid {
+    box-shadow: none;
+  }
+  button, input:where([type="button"], [type="reset"], [type="submit"]), ::file-selector-button {
+    appearance: button;
+  }
+  ::-webkit-inner-spin-button, ::-webkit-outer-spin-button {
+    height: auto;
+  }
+  [hidden]:where(:not([hidden="until-found"])) {
+    display: none !important;
+  }
+}
+@layer utilities {
+  .absolute {
+    position: absolute;
+  }
+  .fixed {
+    position: fixed;
+  }
+  .relative {
+    position: relative;
+  }
+  .sticky {
+    position: sticky;
+  }
+  .inset-0 {
+    inset: 0px;
+  }
+  .top-0 {
+    top: 0px;
+  }
+  .top-1 {
+    top: var(--spacing);
+  }
+  .top-28 {
+    top: calc(var(--spacing) * 28);
+  }
+  .right-1 {
+    right: var(--spacing);
+  }
+  .right-1\/2 {
+    right: calc(1 / 2 * 100%);
+  }
+  .bottom-0 {
+    bottom: 0px;
+  }
+  .bottom-1 {
+    bottom: var(--spacing);
+  }
+  .left-1 {
+    left: var(--spacing);
+  }
+  .left-1\/2 {
+    left: calc(1 / 2 * 100%);
+  }
+  .z-30 {
+    z-index: 30;
+  }
+  .z-50 {
+    z-index: 50;
+  }
+  .z-\[60\] {
+    z-index: 60;
+  }
+  .z-\[70\] {
+    z-index: 70;
+  }
+  .col-span-2 {
+    grid-column: span 2 / span 2;
+  }
+  .-mx-2 {
+    margin-inline: calc(var(--spacing) * -2);
+  }
+  .mx-auto {
+    margin-inline: auto;
+  }
+  .my-1 {
+    margin-block: var(--spacing);
+  }
+  .mt-0 {
+    margin-top: 0px;
+  }
+  .mt-0\.5 {
+    margin-top: calc(var(--spacing) * 0.5);
+  }
+  .mt-1 {
+    margin-top: var(--spacing);
+  }
+  .mt-1\.5 {
+    margin-top: calc(var(--spacing) * 1.5);
+  }
+  .mt-2 {
+    margin-top: calc(var(--spacing) * 2);
+  }
+  .mt-3 {
+    margin-top: calc(var(--spacing) * 3);
+  }
+  .mt-4 {
+    margin-top: calc(var(--spacing) * 4);
+  }
+  .mt-5 {
+    margin-top: calc(var(--spacing) * 5);
+  }
+  .mb-1 {
+    margin-bottom: var(--spacing);
+  }
+  .mb-2 {
+    margin-bottom: calc(var(--spacing) * 2);
+  }
+  .mb-3 {
+    margin-bottom: calc(var(--spacing) * 3);
+  }
+  .mb-4 {
+    margin-bottom: calc(var(--spacing) * 4);
+  }
+  .mb-5 {
+    margin-bottom: calc(var(--spacing) * 5);
+  }
+  .block {
+    display: block;
+  }
+  .flex {
+    display: flex;
+  }
+  .grid {
+    display: grid;
+  }
+  .table {
+    display: table;
+  }
+  .aspect-square {
+    aspect-ratio: 1 / 1;
+  }
+  .h-1 {
+    height: var(--spacing);
+  }
+  .h-1\.5 {
+    height: calc(var(--spacing) * 1.5);
+  }
+  .h-4 {
+    height: calc(var(--spacing) * 4);
+  }
+  .h-5 {
+    height: calc(var(--spacing) * 5);
+  }
+  .h-6 {
+    height: calc(var(--spacing) * 6);
+  }
+  .h-8 {
+    height: calc(var(--spacing) * 8);
+  }
+  .h-9 {
+    height: calc(var(--spacing) * 9);
+  }
+  .h-11 {
+    height: calc(var(--spacing) * 11);
+  }
+  .h-14 {
+    height: calc(var(--spacing) * 14);
+  }
+  .h-full {
+    height: 100%;
+  }
+  .max-h-\[45vh\] {
+    max-height: 45vh;
+  }
+  .max-h-\[50vh\] {
+    max-height: 50vh;
+  }
+  .w-1 {
+    width: var(--spacing);
+  }
+  .w-1\.5 {
+    width: calc(var(--spacing) * 1.5);
+  }
+  .w-4 {
+    width: calc(var(--spacing) * 4);
+  }
+  .w-5 {
+    width: calc(var(--spacing) * 5);
+  }
+  .w-6 {
+    width: calc(var(--spacing) * 6);
+  }
+  .w-7 {
+    width: calc(var(--spacing) * 7);
+  }
+  .w-8 {
+    width: calc(var(--spacing) * 8);
+  }
+  .w-9 {
+    width: calc(var(--spacing) * 9);
+  }
+  .w-11 {
+    width: calc(var(--spacing) * 11);
+  }
+  .w-14 {
+    width: calc(var(--spacing) * 14);
+  }
+  .w-\[92\%\] {
+    width: 92%;
+  }
+  .w-full {
+    width: 100%;
+  }
+  .max-w-\[400px\] {
+    max-width: 400px;
+  }
+  .max-w-\[430px\] {
+    max-width: 430px;
+  }
+  .max-w-sm {
+    max-width: var(--container-sm);
+  }
+  .min-w-0 {
+    min-width: 0px;
+  }
+  .flex-1 {
+    flex: 1;
+  }
+  .flex-shrink {
+    flex-shrink: 1;
+  }
+  .shrink-0 {
+    flex-shrink: 0;
+  }
+  .border-collapse {
+    border-collapse: collapse;
+  }
+  .-translate-x-1 {
+    --tw-translate-x: calc(var(--spacing) * -1);
+    translate: var(--tw-translate-x) var(--tw-translate-y);
+  }
+  .-translate-x-1\/2 {
+    --tw-translate-x: calc(calc(1 / 2 * 100%) * -1);
+    translate: var(--tw-translate-x) var(--tw-translate-y);
+  }
+  .translate-x-6 {
+    --tw-translate-x: calc(var(--spacing) * 6);
+    translate: var(--tw-translate-x) var(--tw-translate-y);
+  }
+  .resize {
+    resize: both;
+  }
+  .grid-cols-2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .grid-cols-3 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .grid-cols-4 {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .grid-cols-7 {
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+  }
+  .flex-col {
+    flex-direction: column;
+  }
+  .flex-wrap {
+    flex-wrap: wrap;
+  }
+  .items-center {
+    align-items: center;
+  }
+  .items-end {
+    align-items: flex-end;
+  }
+  .items-start {
+    align-items: flex-start;
+  }
+  .justify-between {
+    justify-content: space-between;
+  }
+  .justify-center {
+    justify-content: center;
+  }
+  .gap-0 {
+    gap: 0px;
+  }
+  .gap-0\.5 {
+    gap: calc(var(--spacing) * 0.5);
+  }
+  .gap-1 {
+    gap: var(--spacing);
+  }
+  .gap-1\.5 {
+    gap: calc(var(--spacing) * 1.5);
+  }
+  .gap-2 {
+    gap: calc(var(--spacing) * 2);
+  }
+  .gap-3 {
+    gap: calc(var(--spacing) * 3);
+  }
+  :where(.space-y-2 > :not(:last-child)) {
+    --tw-space-y-reverse: 0;
+    margin-block-start: calc(calc(var(--spacing) * 2) * var(--tw-space-y-reverse));
+    margin-block-end: calc(calc(var(--spacing) * 2) * calc(1 - var(--tw-space-y-reverse)));
+  }
+  :where(.space-y-3 > :not(:last-child)) {
+    --tw-space-y-reverse: 0;
+    margin-block-start: calc(calc(var(--spacing) * 3) * var(--tw-space-y-reverse));
+    margin-block-end: calc(calc(var(--spacing) * 3) * calc(1 - var(--tw-space-y-reverse)));
+  }
+  :where(.space-y-4 > :not(:last-child)) {
+    --tw-space-y-reverse: 0;
+    margin-block-start: calc(calc(var(--spacing) * 4) * var(--tw-space-y-reverse));
+    margin-block-end: calc(calc(var(--spacing) * 4) * calc(1 - var(--tw-space-y-reverse)));
+  }
+  :where(.divide-y > :not(:last-child)) {
+    --tw-divide-y-reverse: 0;
+    border-bottom-style: var(--tw-border-style);
+    border-top-style: var(--tw-border-style);
+    border-top-width: calc(1px * var(--tw-divide-y-reverse));
+    border-bottom-width: calc(1px * calc(1 - var(--tw-divide-y-reverse)));
+  }
+  :where(.divide-slate-100 > :not(:last-child)) {
+    border-color: var(--color-slate-100);
+  }
+  .truncate {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .overflow-hidden {
+    overflow: hidden;
+  }
+  .overflow-y-auto {
+    overflow-y: auto;
+  }
+  .rounded-2xl {
+    border-radius: var(--radius-2xl);
+  }
+  .rounded-full {
+    border-radius: calc(infinity * 1px);
+  }
+  .rounded-lg {
+    border-radius: var(--radius-lg);
+  }
+  .rounded-xl {
+    border-radius: var(--radius-xl);
+  }
+  .rounded-t-2xl {
+    border-top-left-radius: var(--radius-2xl);
+    border-top-right-radius: var(--radius-2xl);
+  }
+  .border {
+    border-style: var(--tw-border-style);
+    border-width: 1px;
+  }
+  .border-2 {
+    border-style: var(--tw-border-style);
+    border-width: 2px;
+  }
+  .border-t {
+    border-top-style: var(--tw-border-style);
+    border-top-width: 1px;
+  }
+  .border-b {
+    border-bottom-style: var(--tw-border-style);
+    border-bottom-width: 1px;
+  }
+  .border-dashed {
+    --tw-border-style: dashed;
+    border-style: dashed;
+  }
+  .border-amber-200 {
+    border-color: var(--color-amber-200);
+  }
+  .border-emerald-200 {
+    border-color: var(--color-emerald-200);
+  }
+  .border-emerald-300 {
+    border-color: var(--color-emerald-300);
+  }
+  .border-indigo-200 {
+    border-color: var(--color-indigo-200);
+  }
+  .border-red-200 {
+    border-color: var(--color-red-200);
+  }
+  .border-slate-100 {
+    border-color: var(--color-slate-100);
+  }
+  .border-slate-200 {
+    border-color: var(--color-slate-200);
+  }
+  .border-slate-300 {
+    border-color: var(--color-slate-300);
+  }
+  .bg-amber-50 {
+    background-color: var(--color-amber-50);
+  }
+  .bg-amber-100 {
+    background-color: var(--color-amber-100);
+  }
+  .bg-amber-500 {
+    background-color: var(--color-amber-500);
+  }
+  .bg-emerald-50 {
+    background-color: var(--color-emerald-50);
+  }
+  .bg-emerald-100 {
+    background-color: var(--color-emerald-100);
+  }
+  .bg-emerald-500 {
+    background-color: var(--color-emerald-500);
+  }
+  .bg-emerald-600 {
+    background-color: var(--color-emerald-600);
+  }
+  .bg-indigo-50 {
+    background-color: var(--color-indigo-50);
+  }
+  .bg-indigo-100 {
+    background-color: var(--color-indigo-100);
+  }
+  .bg-indigo-500 {
+    background-color: var(--color-indigo-500);
+  }
+  .bg-indigo-600 {
+    background-color: var(--color-indigo-600);
+  }
+  .bg-orange-50 {
+    background-color: var(--color-orange-50);
+  }
+  .bg-red-50 {
+    background-color: var(--color-red-50);
+  }
+  .bg-red-100 {
+    background-color: var(--color-red-100);
+  }
+  .bg-red-500 {
+    background-color: var(--color-red-500);
+  }
+  .bg-red-600 {
+    background-color: var(--color-red-600);
+  }
+  .bg-sky-50 {
+    background-color: var(--color-sky-50);
+  }
+  .bg-sky-100 {
+    background-color: var(--color-sky-100);
+  }
+  .bg-sky-600 {
+    background-color: var(--color-sky-600);
+  }
+  .bg-slate-50 {
+    background-color: var(--color-slate-50);
+  }
+  .bg-slate-100 {
+    background-color: var(--color-slate-100);
+  }
+  .bg-slate-200 {
+    background-color: var(--color-slate-200);
+  }
+  .bg-slate-800 {
+    background-color: var(--color-slate-800);
+  }
+  .bg-slate-900 {
+    background-color: var(--color-slate-900);
+  }
+  .bg-slate-900\/50 {
+    background-color: color-mix(in srgb, oklch(20.8% 0.042 265.755) 50%, transparent);
+    @supports (color: color-mix(in lab, red, red)) {
+      background-color: color-mix(in oklab, var(--color-slate-900) 50%, transparent);
+    }
+  }
+  .bg-slate-900\/60 {
+    background-color: color-mix(in srgb, oklch(20.8% 0.042 265.755) 60%, transparent);
+    @supports (color: color-mix(in lab, red, red)) {
+      background-color: color-mix(in oklab, var(--color-slate-900) 60%, transparent);
+    }
+  }
+  .bg-violet-100 {
+    background-color: var(--color-violet-100);
+  }
+  .bg-white {
+    background-color: var(--color-white);
+  }
+  .bg-white\/95 {
+    background-color: color-mix(in srgb, #fff 95%, transparent);
+    @supports (color: color-mix(in lab, red, red)) {
+      background-color: color-mix(in oklab, var(--color-white) 95%, transparent);
+    }
+  }
+  .p-0 {
+    padding: 0px;
+  }
+  .p-1 {
+    padding: var(--spacing);
+  }
+  .p-2 {
+    padding: calc(var(--spacing) * 2);
+  }
+  .p-3 {
+    padding: calc(var(--spacing) * 3);
+  }
+  .p-4 {
+    padding: calc(var(--spacing) * 4);
+  }
+  .p-5 {
+    padding: calc(var(--spacing) * 5);
+  }
+  .p-6 {
+    padding: calc(var(--spacing) * 6);
+  }
+  .px-1 {
+    padding-inline: var(--spacing);
+  }
+  .px-1\.5 {
+    padding-inline: calc(var(--spacing) * 1.5);
+  }
+  .px-2 {
+    padding-inline: calc(var(--spacing) * 2);
+  }
+  .px-3 {
+    padding-inline: calc(var(--spacing) * 3);
+  }
+  .px-4 {
+    padding-inline: calc(var(--spacing) * 4);
+  }
+  .py-1 {
+    padding-block: var(--spacing);
+  }
+  .py-1\.5 {
+    padding-block: calc(var(--spacing) * 1.5);
+  }
+  .py-2 {
+    padding-block: calc(var(--spacing) * 2);
+  }
+  .py-2\.5 {
+    padding-block: calc(var(--spacing) * 2.5);
+  }
+  .py-3 {
+    padding-block: calc(var(--spacing) * 3);
+  }
+  .py-4 {
+    padding-block: calc(var(--spacing) * 4);
+  }
+  .py-6 {
+    padding-block: calc(var(--spacing) * 6);
+  }
+  .py-8 {
+    padding-block: calc(var(--spacing) * 8);
+  }
+  .pt-2 {
+    padding-top: calc(var(--spacing) * 2);
+  }
+  .pb-2 {
+    padding-bottom: calc(var(--spacing) * 2);
+  }
+  .text-center {
+    text-align: center;
+  }
+  .text-left {
+    text-align: left;
+  }
+  .text-right {
+    text-align: right;
+  }
+  .font-mono {
+    font-family: var(--font-mono);
+  }
+  .text-2xl {
+    font-size: var(--text-2xl);
+    line-height: var(--tw-leading, var(--text-2xl--line-height));
+  }
+  .text-3xl {
+    font-size: var(--text-3xl);
+    line-height: var(--tw-leading, var(--text-3xl--line-height));
+  }
+  .text-4xl {
+    font-size: var(--text-4xl);
+    line-height: var(--tw-leading, var(--text-4xl--line-height));
+  }
+  .text-base {
+    font-size: var(--text-base);
+    line-height: var(--tw-leading, var(--text-base--line-height));
+  }
+  .text-lg {
+    font-size: var(--text-lg);
+    line-height: var(--tw-leading, var(--text-lg--line-height));
+  }
+  .text-sm {
+    font-size: var(--text-sm);
+    line-height: var(--tw-leading, var(--text-sm--line-height));
+  }
+  .text-xl {
+    font-size: var(--text-xl);
+    line-height: var(--tw-leading, var(--text-xl--line-height));
+  }
+  .text-xs {
+    font-size: var(--text-xs);
+    line-height: var(--tw-leading, var(--text-xs--line-height));
+  }
+  .text-\[10px\] {
+    font-size: 10px;
+  }
+  .text-\[11px\] {
+    font-size: 11px;
+  }
+  .leading-relaxed {
+    --tw-leading: var(--leading-relaxed);
+    line-height: var(--leading-relaxed);
+  }
+  .font-bold {
+    --tw-font-weight: var(--font-weight-bold);
+    font-weight: var(--font-weight-bold);
+  }
+  .font-medium {
+    --tw-font-weight: var(--font-weight-medium);
+    font-weight: var(--font-weight-medium);
+  }
+  .font-normal {
+    --tw-font-weight: var(--font-weight-normal);
+    font-weight: var(--font-weight-normal);
+  }
+  .font-semibold {
+    --tw-font-weight: var(--font-weight-semibold);
+    font-weight: var(--font-weight-semibold);
+  }
+  .break-all {
+    word-break: break-all;
+  }
+  .text-amber-600 {
+    color: var(--color-amber-600);
+  }
+  .text-amber-700 {
+    color: var(--color-amber-700);
+  }
+  .text-emerald-600 {
+    color: var(--color-emerald-600);
+  }
+  .text-emerald-700 {
+    color: var(--color-emerald-700);
+  }
+  .text-indigo-600 {
+    color: var(--color-indigo-600);
+  }
+  .text-indigo-700 {
+    color: var(--color-indigo-700);
+  }
+  .text-indigo-800 {
+    color: var(--color-indigo-800);
+  }
+  .text-orange-600 {
+    color: var(--color-orange-600);
+  }
+  .text-orange-700 {
+    color: var(--color-orange-700);
+  }
+  .text-red-600 {
+    color: var(--color-red-600);
+  }
+  .text-red-700 {
+    color: var(--color-red-700);
+  }
+  .text-sky-600 {
+    color: var(--color-sky-600);
+  }
+  .text-sky-700 {
+    color: var(--color-sky-700);
+  }
+  .text-slate-300 {
+    color: var(--color-slate-300);
+  }
+  .text-slate-400 {
+    color: var(--color-slate-400);
+  }
+  .text-slate-500 {
+    color: var(--color-slate-500);
+  }
+  .text-slate-600 {
+    color: var(--color-slate-600);
+  }
+  .text-slate-700 {
+    color: var(--color-slate-700);
+  }
+  .text-violet-700 {
+    color: var(--color-violet-700);
+  }
+  .text-white {
+    color: var(--color-white);
+  }
+  .capitalize {
+    text-transform: capitalize;
+  }
+  .uppercase {
+    text-transform: uppercase;
+  }
+  .line-through {
+    text-decoration-line: line-through;
+  }
+  .underline {
+    text-decoration-line: underline;
+  }
+  .opacity-50 {
+    opacity: 50%;
+  }
+  .opacity-60 {
+    opacity: 60%;
+  }
+  .shadow {
+    --tw-shadow: 0 1px 3px 0 var(--tw-shadow-color, rgb(0 0 0 / 0.1)), 0 1px 2px -1px var(--tw-shadow-color, rgb(0 0 0 / 0.1));
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+  .shadow-lg {
+    --tw-shadow: 0 10px 15px -3px var(--tw-shadow-color, rgb(0 0 0 / 0.1)), 0 4px 6px -4px var(--tw-shadow-color, rgb(0 0 0 / 0.1));
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+  .ring-2 {
+    --tw-ring-shadow: var(--tw-ring-inset, ) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color, currentcolor);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+  .ring-indigo-300 {
+    --tw-ring-color: var(--color-indigo-300);
+  }
+  .outline {
+    outline-style: var(--tw-outline-style);
+    outline-width: 1px;
+  }
+  .backdrop-blur {
+    --tw-backdrop-blur: blur(8px);
+    -webkit-backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );
+    backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );
+  }
+  .backdrop-filter {
+    -webkit-backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );
+    backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );
+  }
+  @media (width >= 40rem) {
+    .sm\:bottom-\[34px\] {
+      bottom: 34px;
+    }
+    .sm\:max-w-\[410px\] {
+      max-width: 410px;
+    }
+    .sm\:items-center {
+      align-items: center;
+    }
+    .sm\:rounded-2xl {
+      border-radius: var(--radius-2xl);
+    }
+  }
+}
+@property --tw-translate-x {
+  syntax: "*";
+  inherits: false;
+  initial-value: 0;
+}
+@property --tw-translate-y {
+  syntax: "*";
+  inherits: false;
+  initial-value: 0;
+}
+@property --tw-translate-z {
+  syntax: "*";
+  inherits: false;
+  initial-value: 0;
+}
+@property --tw-space-y-reverse {
+  syntax: "*";
+  inherits: false;
+  initial-value: 0;
+}
+@property --tw-divide-y-reverse {
+  syntax: "*";
+  inherits: false;
+  initial-value: 0;
+}
+@property --tw-border-style {
+  syntax: "*";
+  inherits: false;
+  initial-value: solid;
+}
+@property --tw-leading {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-font-weight {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-shadow {
+  syntax: "*";
+  inherits: false;
+  initial-value: 0 0 #0000;
+}
+@property --tw-shadow-color {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-shadow-alpha {
+  syntax: "<percentage>";
+  inherits: false;
+  initial-value: 100%;
+}
+@property --tw-inset-shadow {
+  syntax: "*";
+  inherits: false;
+  initial-value: 0 0 #0000;
+}
+@property --tw-inset-shadow-color {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-inset-shadow-alpha {
+  syntax: "<percentage>";
+  inherits: false;
+  initial-value: 100%;
+}
+@property --tw-ring-color {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-ring-shadow {
+  syntax: "*";
+  inherits: false;
+  initial-value: 0 0 #0000;
+}
+@property --tw-inset-ring-color {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-inset-ring-shadow {
+  syntax: "*";
+  inherits: false;
+  initial-value: 0 0 #0000;
+}
+@property --tw-ring-inset {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-ring-offset-width {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+@property --tw-ring-offset-color {
+  syntax: "*";
+  inherits: false;
+  initial-value: #fff;
+}
+@property --tw-ring-offset-shadow {
+  syntax: "*";
+  inherits: false;
+  initial-value: 0 0 #0000;
+}
+@property --tw-outline-style {
+  syntax: "*";
+  inherits: false;
+  initial-value: solid;
+}
+@property --tw-backdrop-blur {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-backdrop-brightness {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-backdrop-contrast {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-backdrop-grayscale {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-backdrop-hue-rotate {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-backdrop-invert {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-backdrop-opacity {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-backdrop-saturate {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-backdrop-sepia {
+  syntax: "*";
+  inherits: false;
+}
+@layer properties {
+  @supports ((-webkit-hyphens: none) and (not (margin-trim: block))) or ((-moz-orient: inline) and (not (color:rgb(from red r g b)))) {
+    *, ::before, ::after, ::backdrop {
+      --tw-translate-x: 0;
+      --tw-translate-y: 0;
+      --tw-translate-z: 0;
+      --tw-space-y-reverse: 0;
+      --tw-divide-y-reverse: 0;
+      --tw-border-style: solid;
+      --tw-leading: initial;
+      --tw-font-weight: initial;
+      --tw-shadow: 0 0 #0000;
+      --tw-shadow-color: initial;
+      --tw-shadow-alpha: 100%;
+      --tw-inset-shadow: 0 0 #0000;
+      --tw-inset-shadow-color: initial;
+      --tw-inset-shadow-alpha: 100%;
+      --tw-ring-color: initial;
+      --tw-ring-shadow: 0 0 #0000;
+      --tw-inset-ring-color: initial;
+      --tw-inset-ring-shadow: 0 0 #0000;
+      --tw-ring-inset: initial;
+      --tw-ring-offset-width: 0px;
+      --tw-ring-offset-color: #fff;
+      --tw-ring-offset-shadow: 0 0 #0000;
+      --tw-outline-style: solid;
+      --tw-backdrop-blur: initial;
+      --tw-backdrop-brightness: initial;
+      --tw-backdrop-contrast: initial;
+      --tw-backdrop-grayscale: initial;
+      --tw-backdrop-hue-rotate: initial;
+      --tw-backdrop-invert: initial;
+      --tw-backdrop-opacity: initial;
+      --tw-backdrop-saturate: initial;
+      --tw-backdrop-sepia: initial;
+    }
+  }
+}
+
+</style>
+<style>
+  html,body{background:#e2e8f0;-webkit-tap-highlight-color:transparent}
+  body{font-family:ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif}
+  .app{max-width:430px;margin:0 auto;min-height:100vh;background:#f8fafc;position:relative;box-shadow:0 0 40px rgba(15,23,42,.12)}
+  @media(min-width:640px){.app{margin:24px auto;min-height:860px;border-radius:36px;overflow:hidden;border:10px solid #18181b}}
+  @layer components{
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:.5rem;border-radius:.8rem;padding:.65rem 1rem;font-size:.875rem;font-weight:600;transition:transform .08s}
+  .btn:active{transform:scale(.97)}
+  .card{background:#fff;border:1px solid #e2e8f0;border-radius:1rem;padding:1rem;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+  .chip{display:inline-flex;align-items:center;gap:.25rem;border-radius:999px;padding:.1rem .5rem;font-size:.7rem;font-weight:600}
+  .label{display:block;font-size:.68rem;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#64748b;margin-bottom:.25rem}
+  }
+  .scroll{padding-bottom:6.5rem}
+  .fade{animation:fade .18s ease-out}@keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  input[type=checkbox]{width:1.25rem;height:1.25rem;accent-color:#059669}
+</style>
+</head>
+<body>
+<div class="app" id="app"></div>
+<script>
+// ====================== DANE DEMO ======================
+const FEE = 40, MONTHLY = 150, DEADLINE = 24;
+const CLUB = { name: 'VolleyClub Alternatywa', prefix: 'VCA', account: 'PL61 1090 1014 0000 0712 1981 2874', recipient: 'VolleyClub Alternatywa', place: 'Hala MOSiR, ul. Sportowa 1' };
+const NAMES = ['Jan Kowalski','Anna Nowak','Bartek Wiśniewski','Celina Kowalczyk','Damian Lewandowski','Ewa Zielińska','Filip Szymański','Gosia Woźniak','Hubert Dąbrowski','Iza Kozłowska','Kuba Jankowski','Ola Mazur','Piotr Kwiatkowski','Rafał Krawczyk','Sylwia Piotrowska','Tomek Grabowski','Wiktor Pawłowski'];
+let D, S;
+
+function at(dayOffset, h, m = 0) { const d = new Date(); d.setHours(h, m, 0, 0); d.setDate(d.getDate() + dayOffset); return d; }
+function seed() {
+  const members = NAMES.map((n, i) => ({ id: 'u' + i, name: n, code: 'VCA-' + String(i + 1).padStart(2, '0'), status: 'active',
+    role: i === 1 ? 'owner' : i === 2 ? 'caretaker' : 'member', billing: [1, 5, 7, 11, 14].includes(i) ? 'monthly' : 'per_session',
+    aliases: i === 3 ? ['Marek Kowalczyk'] : [] }));
+  members.push({ id: 'p1', name: 'Zosia Nowicka', code: null, status: 'pending', role: 'member', billing: 'per_session', aliases: [] });
+  members.push({ id: 'p2', name: 'Marek Adamczyk', code: null, status: 'pending', role: 'member', billing: 'per_session', aliases: [] });
+  const sign = (ids, opts = {}) => ids.map((i, k) => ({ uid: 'u' + i, status: 'main', car: [2, 4, 9].includes(i), beer: [3, 4, 6, 10].includes(i), staff: false, at: k, ...(opts[i] || {}) }));
+  const trainings = [
+    { id: 't0', title: 'Trening siatkówki', start: at(-1, 19), end: at(-1, 21), limit: 14, status: 'scheduled', signups: sign([0, 2, 3, 4, 5, 6, 8, 9, 10, 12]) },
+    { id: 't1', title: 'Trening siatkówki', start: at(1, 19), end: at(1, 21), limit: 14, status: 'scheduled', signups: sign([2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13]) },
+    { id: 't2', title: 'Gra kontrolna', start: at(3, 18, 30), end: at(3, 20, 30), limit: 12, status: 'scheduled',
+      signups: [...sign([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]), { uid: 'u13', status: 'reserve', car: false, beer: false, staff: false, at: 20 }, { uid: 'u14', status: 'reserve', car: false, beer: true, staff: false, at: 21 }] },
+    { id: 't3', title: 'Trening siatkówki', start: at(8, 19), end: at(8, 21), limit: 14, status: 'scheduled', signups: sign([2, 5, 9, 15]) },
+    { id: 't4', title: 'Trening siatkówki', start: at(10, 19), end: at(10, 21), limit: 14, status: 'scheduled', signups: [] },
+  ];
+  // historia: zakończone treningi z zatwierdzoną obecnością (do statystyk) – stałe „losowe” dane
+  let sd = 7; const rnd = () => (sd = (sd * 16807) % 2147483647) / 2147483647;
+  const ATT = [0.85, 0.95, 0.9, 0.7, 0.8, 0.6, 0.75, 0.5, 0.65, 0.55, 0.88, 0.4, 0.7, 0.45, 0.3, 0.6, 0.35];
+  const CAR = [0.3, 0.1, 0.6, 0.05, 0.85, 0.1, 0.2, 0, 0.4, 0.7, 0.1, 0, 0.5, 0.1, 0, 0.2, 0];
+  const BEER = [0.5, 0.2, 0.3, 0.6, 0.4, 0.1, 0.9, 0.2, 0.7, 0.1, 0.8, 0.3, 0.2, 0.5, 0.6, 0.1, 0.4];
+  for (let w = 1; w <= 14; w++) {
+    for (const dow of [0, 3]) {
+      const start = at(-(w * 7) + dow - 2, 19), att = new Set(), signups = [];
+      NAMES.forEach((n, i) => {
+        const r = rnd();
+        if (r > ATT[i]) return;
+        att.add('u' + i);
+        signups.push({ uid: 'u' + i, status: 'main', car: rnd() < CAR[i], beer: rnd() < BEER[i], staff: false, at: i });
+      });
+      trainings.push({ id: 'h' + w + '_' + dow, title: 'Trening siatkówki', start, end: new Date(start.getTime() + 2 * 36e5), limit: 14, status: 'settled', signups, attendance: att });
+    }
+  }
+  const tx = [];
+  const add = (uid, amount, type, desc, daysAgo) => tx.push({ id: Math.random().toString(36).slice(2), uid, amount, type, desc, date: at(-daysAgo, 12) });
+  members.filter(m => m.status === 'active').forEach((m, i) => {
+    if (m.billing === 'monthly') { add(m.id, -MONTHLY, 'monthly_fee', 'Składka miesięczna', 19); if (i % 2) add(m.id, MONTHLY, 'payment', 'Przelew: ' + m.code + ' ' + m.name, 15); }
+    else { add(m.id, -FEE, 'session_fee', 'Trening siatkówki', 13); add(m.id, -FEE, 'session_fee', 'Trening siatkówki', 6); if (i % 3 === 0) add(m.id, 120, 'payment', 'Przelew: ' + m.code, 10); }
+  });
+  D = { members, trainings, tx, chargedMonths: [] };
+  S = { me: 'u0', role: 'member', tab: 'trainings', view: 'list', tid: null, att: null, modal: null, month: new Date(new Date().getFullYear(), new Date().getMonth(), 1), day: null, sub: null, importRows: null, toast: null, intro: S ? false : true };
+}
+
+// ====================== POMOCNICZE ======================
+const $ = s => document.querySelector(s);
+const money = v => new Intl.NumberFormat('pl-PL', { style: 'currency', currency: 'PLN' }).format(v);
+const fDay = d => d.toLocaleDateString('pl-PL', { weekday: 'short', day: 'numeric', month: 'short' });
+const fLong = d => d.toLocaleDateString('pl-PL', { weekday: 'long', day: 'numeric', month: 'long' });
+const fTime = d => d.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' });
+const fDate = d => d.toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit', year: 'numeric' });
+const dayKey = d => d.getFullYear() + '-' + d.getMonth() + '-' + d.getDate();
+const mem = id => D.members.find(m => m.id === id);
+const me = () => mem(S.me);
+const isStaff = () => S.role !== 'member';
+const isOwner = () => S.role === 'owner';
+const tr = id => D.trainings.find(t => t.id === id);
+const main = t => t.signups.filter(s => s.status === 'main').sort((a, b) => a.at - b.at);
+const reserve = t => t.signups.filter(s => s.status === 'reserve').sort((a, b) => a.at - b.at);
+const late = t => t.signups.filter(s => s.status === 'late');
+const balance = uid => Math.round(D.tx.filter(x => x.uid === uid).reduce((s, x) => s + x.amount, 0) * 100) / 100;
+const initials = n => n.split(' ').map(p => p[0]).slice(0, 2).join('').toUpperCase();
+let seq = 100;
+function toast(text, kind = 'ok') { S.toast = { text, kind }; clearTimeout(window._tt); window._tt = setTimeout(() => { S.toast = null; render(); }, 3200); }
+function avatar(n, size = 'w-9 h-9') { return `<div class="${size} shrink-0 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-bold">${initials(n)}</div>`; }
+const I = {
+  cal: '<svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>',
+  wallet: '<svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 7V5a2 2 0 0 0-2-2H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/></svg>',
+  gear: '<svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>',
+  ball: '<svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M11.1 7.1a16.6 16.6 0 0 1 10.6 9.5M8.6 2.6A16 16 0 0 0 6 13.4M18 21a16.4 16.4 0 0 0-5.6-15.4M2.8 15.7a16.5 16.5 0 0 1 10.4-3.9"/></svg>',
+  trophy: '<svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6M18 9h1.5a2.5 2.5 0 0 0 0-5H18M4 22h16M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>',
+  team: '<svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
+  back: '<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg>',
+  copy: '<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>',
+};
+
+// ====================== AKCJE ======================
+const A = {
+  role: d => { S.role = d.v; S.att = null; if ((S.tab === 'admin' && !isOwner()) || (S.tab === 'team' && !isStaff())) S.tab = 'trainings'; toast('Widok: ' + ({ member: 'Zawodnik', caretaker: 'Opiekun / trener', owner: 'Właściciel klubu' })[d.v], 'info'); },
+  tab: d => { S.tab = d.v; S.tid = null; S.att = null; S.sub = null; window.scrollTo(0, 0); },
+  view: d => { S.view = d.v; },
+  open: d => { S.tid = d.id; S.att = null; window.scrollTo(0, 0); },
+  back: () => { S.tid = null; S.att = null; },
+  month: d => { S.month = new Date(S.month.getFullYear(), S.month.getMonth() + Number(d.v), 1); S.day = null; },
+  day: d => { S.day = d.v; },
+  closeIntro: () => { S.intro = false; },
+  reset: () => { seed(); S.intro = false; toast('Demo zresetowane', 'info'); },
+  closeModal: () => { S.modal = null; },
+  confirm: () => { const fn = S.modal && S.modal.fn; S.modal = null; fn && fn(); },
+  join: () => {
+    const t = tr(S.tid); const full = main(t).length >= t.limit;
+    if (me().billing === 'per_session') {
+      S.modal = { title: 'Potwierdź udział', body: `Zapisanie się na ten trening obciąży Twoje saldo w klubie <b>${CLUB.name}</b> kwotą <b>${money(FEE)}</b>. Czy potwierdzasz udział?` + (full ? '<p class="mt-2 text-amber-700">Lista jest pełna – trafisz na listę rezerwową. Opłata tylko, jeśli zagrasz.</p>' : ''), ok: 'Tak, zapisuję się', fn: doJoin };
+    } else doJoin();
+  },
+  leave: () => {
+    const t = tr(S.tid); const s = t.signups.find(x => x.uid === S.me);
+    const isLate = s.status === 'main' && me().billing === 'per_session' && (t.start - Date.now()) / 36e5 < DEADLINE;
+    S.modal = { title: 'Wypisać się z treningu?', danger: isLate, body: isLate ? `Wypisujesz się po terminie (mniej niż <b>${DEADLINE} h</b> przed treningiem). Opiekun może naliczyć opłatę <b>${money(FEE)}</b>.` : 'Twoje miejsce zajmie pierwsza osoba z listy rezerwowej.', ok: 'Wypisz mnie', fn: () => doLeave(isLate) };
+  },
+  flag: d => { const s = tr(S.tid).signups.find(x => x.uid === S.me); s[d.v] = !s[d.v]; },
+  pick: d => { S.modal = { picker: d.v }; },
+  add: d => {
+    const t = tr(S.tid); const ex = t.signups.find(s => s.uid === d.id);
+    if (ex) { ex.status = 'main'; ex.staff = true; } else t.signups.push({ uid: d.id, status: 'main', car: false, beer: false, staff: true, at: seq++ });
+    if (S.att) S.att.present.add(d.id);
+    S.modal = null; toast('Dopisano: ' + mem(d.id).name);
+  },
+  removeSign: d => { const t = tr(S.tid); const s = t.signups.find(x => x.uid === d.id); t.signups = t.signups.filter(x => x !== s); if (s.status === 'main') promote(t); toast('Usunięto z listy'); },
+  startAtt: () => { const t = tr(S.tid); S.att = { present: new Set(main(t).map(s => s.uid)), late: new Set(late(t).map(s => s.uid)) }; },
+  cancelAtt: () => { S.att = null; },
+  togglePresent: d => { S.att.present.has(d.id) ? S.att.present.delete(d.id) : S.att.present.add(d.id); },
+  toggleLate: d => { S.att.late.has(d.id) ? S.att.late.delete(d.id) : S.att.late.add(d.id); },
+  settle: () => { const x = settleCalc(); S.modal = { title: 'Zatwierdzić obecność?', body: `Obecnych: <b>${x.present.length}</b>.<br>Po zatwierdzeniu lista obecności zostanie zamknięta.`, ok: 'Zatwierdź obecność', fn: doSettle }; },
+  newTraining: () => { S.modal = { form: 'training' }; },
+  saveTraining: () => {
+    const date = $('#f-date').value, time = $('#f-time').value, limit = Number($('#f-limit').value) || 14, rep = Number($('#f-rep').value) || 1;
+    if (!date || !time) return toast('Podaj datę i godzinę', 'err');
+    for (let i = 0; i < rep; i++) { const st = new Date(date + 'T' + time); st.setDate(st.getDate() + 7 * i); const en = new Date(st.getTime() + 2 * 36e5);
+      D.trainings.push({ id: 't' + (seq++), title: $('#f-title').value || 'Trening', start: st, end: en, limit, status: 'scheduled', signups: [] }); }
+    S.modal = null; toast(rep > 1 ? `Dodano ${rep} treningów` : 'Dodano trening');
+  },
+  cancelTraining: () => { S.modal = { title: 'Odwołać trening?', danger: true, body: 'Trening zostanie oznaczony jako odwołany. Nikt nie zostanie obciążony.', ok: 'Odwołaj', fn: () => { tr(S.tid).status = 'cancelled'; toast('Trening odwołany'); } }; },
+  period: d => { S.period = d.v; },
+  teamFilter: d => { S.teamFilter = d.v; },
+  history: d => { S.modal = { history: d.id }; },
+  copy: d => { try { navigator.clipboard.writeText(d.v); } catch (e) {} toast('Skopiowano: ' + d.v.slice(0, 32), 'info'); },
+  sub: d => { S.sub = d.v; S.importRows = null; window.scrollTo(0, 0); },
+  approve: d => { const m = mem(d.id); const n = D.members.filter(x => x.code).length + 1; m.status = 'active'; m.code = 'VCA-' + String(n).padStart(2, '0'); toast(`Zaakceptowano: ${m.name} (${m.code})`); },
+  reject: d => { const m = mem(d.id); m.status = 'removed'; toast('Odrzucono zgłoszenie', 'info'); },
+  billing: d => { const m = mem(d.id); m.billing = m.billing === 'monthly' ? 'per_session' : 'monthly'; toast(m.name + ': ' + (m.billing === 'monthly' ? 'abonament' : 'płatność za trening')); },
+  caretaker: d => { const m = mem(d.id); m.role = m.role === 'caretaker' ? 'member' : 'caretaker'; toast(m.role === 'caretaker' ? 'Nadano rolę Opiekuna' : 'Odebrano rolę Opiekuna'); },
+  chargeMonth: () => {
+    const period = new Date().toLocaleDateString('pl-PL', { month: 'long', year: 'numeric' });
+    const list = D.members.filter(m => m.status === 'active' && m.billing === 'monthly');
+    S.modal = { title: 'Naliczyć składki?', body: `Każdy zawodnik z abonamentem (${list.length} os.) zostanie obciążony kwotą <b>${money(MONTHLY)}</b> za <b>${period}</b>.`, ok: 'Nalicz', fn: () => {
+      if (D.chargedMonths.includes(period)) return toast(`Składka za ${period} była już naliczona – ochrona przed podwójnym naliczeniem`, 'info');
+      D.chargedMonths.push(period); list.forEach(m => D.tx.push({ id: 'x' + (seq++), uid: m.id, amount: -MONTHLY, type: 'monthly_fee', desc: 'Składka miesięczna ' + period, date: new Date() }));
+      toast(`Naliczono składkę: ${list.length} os. × ${money(MONTHLY)}`); } };
+  },
+  loadCsv: () => {
+    const raw = [
+      { date: at(-2, 9), amount: 80, title: 'VCA-01 Jan Kowalski treningi', sender: 'JAN KOWALSKI' },
+      { date: at(-3, 9), amount: 120, title: 'vca 5 siatkowka', sender: 'DAMIAN LEWANDOWSKI' },
+      { date: at(-4, 9), amount: 100, title: 'Za treningi Celiny', sender: 'MAREK KOWALCZYK' },
+      { date: at(-5, 9), amount: 40, title: 'Trening czwartek', sender: 'EWA ZIELIŃSKA' },
+      { date: at(-6, 9), amount: 250, title: 'Darowizna na piłki', sender: 'FIRMA XYZ SP. Z O.O.' },
+    ];
+    S.importRows = raw.map((r, i) => { const m = match(r); return { ...r, i, uid: m ? m.uid : '', reason: m ? m.reason : null, sel: !!m, dup: false }; });
+  },
+  importSel: d => { const r = S.importRows[d.i]; r.sel = !r.sel; },
+  book: () => {
+    const rows = S.importRows.filter(r => r.sel && r.uid && !r.dup);
+    rows.forEach(r => { D.tx.push({ id: 'x' + (seq++), uid: r.uid, amount: r.amount, type: 'payment', desc: 'Przelew: ' + r.title, date: r.date }); r.dup = true; r.sel = false; });
+    toast(`Zaksięgowano ${rows.length} wpłat (${money(rows.reduce((s, r) => s + r.amount, 0))})`);
+  },
+};
+function doJoin() {
+  const t = tr(S.tid); const st = main(t).length < t.limit ? 'main' : 'reserve';
+  const ex = t.signups.find(s => s.uid === S.me);
+  if (ex) { ex.status = st; ex.at = seq++; } else t.signups.push({ uid: S.me, status: st, car: false, beer: false, staff: false, at: seq++ });
+  toast(st === 'main' ? 'Zapisano! Jesteś na liście głównej.' : 'Lista pełna – jesteś na liście rezerwowej.', st === 'main' ? 'ok' : 'info');
+}
+function promote(t) { const free = t.limit - main(t).length; const r = reserve(t).slice(0, Math.max(free, 0)); r.forEach(s => s.status = 'main'); return r; }
+function doLeave(isLate) {
+  const t = tr(S.tid); const s = t.signups.find(x => x.uid === S.me); const wasMain = s.status === 'main';
+  if (isLate) { s.status = 'late'; s.car = s.beer = false; } else t.signups = t.signups.filter(x => x !== s);
+  const promoted = wasMain ? promote(t) : [];
+  toast((isLate ? 'Wypisano po terminie.' : 'Wypisano z treningu.') + (promoted.length ? ` ${mem(promoted[0].uid).name} awansuje z rezerwy!` : ''), 'info');
+}
+function settleCalc() {
+  const t = tr(S.tid); const present = [...S.att.present];
+  const payers = present.filter(u => mem(u).billing === 'per_session');
+  const lateIds = late(t).map(s => s.uid).filter(u => S.att.late.has(u) && !S.att.present.has(u) && mem(u).billing === 'per_session');
+  return { present, payers, lateIds, total: (payers.length + lateIds.length) * FEE };
+}
+function doSettle() {
+  const t = tr(S.tid); const x = settleCalc(); const label = t.title + ' ' + fDate(t.start);
+  x.payers.forEach(u => D.tx.push({ id: 'x' + (seq++), uid: u, amount: -FEE, type: 'session_fee', desc: label, date: t.start }));
+  x.lateIds.forEach(u => D.tx.push({ id: 'x' + (seq++), uid: u, amount: -FEE, type: 'late_cancel_fee', desc: 'Późne wypisanie: ' + label, date: t.start }));
+  x.present.forEach(u => { if (!t.signups.find(s => s.uid === u)) t.signups.push({ uid: u, status: 'main', car: false, beer: false, staff: true, at: seq++ }); });
+  t.attendance = new Set(x.present); t.status = 'settled'; S.att = null;
+  toast(`Obecność zapisana: ${x.present.length} osób`);
+}
+function norm(s) { return s.toLowerCase().replace(/ł/g, 'l').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim(); }
+function match(r) {
+  const hay = ' ' + norm(r.title + ' ' + r.sender) + ' ';
+  const cm = (r.title + ' ' + r.sender).toLowerCase().match(/vca\s*[-_ ]?\s*0*(\d{1,3})/);
+  const act = D.members.filter(m => m.status === 'active');
+  if (cm) { const m = act.find(x => Number(x.code.slice(4)) === Number(cm[1])); if (m) return { uid: m.id, reason: 'kod' }; }
+  const al = act.filter(m => m.aliases.some(a => hay.includes(' ' + norm(a) + ' '))); if (al.length === 1) return { uid: al[0].id, reason: 'alias' };
+  const nm = act.filter(m => norm(m.name).split(' ').every(p => hay.includes(' ' + p + ' '))); if (nm.length === 1) return { uid: nm[0].id, reason: 'imię i nazwisko' };
+  return null;
+}
+
+// ====================== WIDOKI ======================
+function header() {
+  const roles = [['member', 'Zawodnik'], ['caretaker', 'Opiekun'], ['owner', 'Właściciel']];
+  return `<div class="sticky top-0 z-30 bg-white/95 backdrop-blur border-b border-slate-200">
+    <div class="bg-indigo-600 text-white text-[11px] px-4 py-1.5 flex items-center justify-between"><span>🎮 DEMO – przykładowe dane, nic nie jest zapisywane</span><button data-a="reset" class="underline">reset</button></div>
+    <div class="flex items-center justify-between px-4 h-14">
+      <div class="flex items-center gap-2 min-w-0"><span class="w-8 h-8 rounded-lg bg-indigo-600 text-white flex items-center justify-center">${I.ball}</span><span class="font-semibold truncate">${CLUB.name}</span></div>
+      ${avatar(me().name, 'w-9 h-9')}
+    </div>
+    <div class="px-4 pb-2"><div class="grid grid-cols-3 bg-slate-100 rounded-xl p-1 text-xs font-semibold">${roles.map(([v, l]) => `<button data-a="role" data-v="${v}" class="py-1.5 rounded-lg ${S.role === v ? 'bg-white shadow text-indigo-700' : 'text-slate-500'}">${l}</button>`).join('')}</div></div>
+  </div>`;
+}
+function nav() {
+  const items = [['trainings', 'Treningi', I.cal], ['finance', 'Finanse', I.wallet]];
+  if (isStaff()) items.splice(1, 0, ['team', 'Zespół', I.team]);
+  items.splice(items.length - 1, 0, ['stats', 'Statystyki', I.trophy]);
+  if (isOwner()) items.push(['admin', 'Zarządzanie', I.gear]);
+  const pend = D.members.filter(m => m.status === 'pending').length;
+  return `<nav class="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[430px] sm:max-w-[410px] sm:bottom-[34px] z-30 bg-white/95 backdrop-blur border-t border-slate-200 flex pb-2">${items.map(([v, l, ic]) =>
+    `<button data-a="tab" data-v="${v}" class="relative flex-1 flex flex-col items-center gap-0.5 pt-2 text-xs font-medium ${S.tab === v ? 'text-indigo-600' : 'text-slate-500'}">${ic}${l}${v === 'admin' && pend ? `<span class="absolute top-1 right-1/2 translate-x-6 bg-red-500 text-white rounded-full px-1.5 text-[10px]">${pend}</span>` : ''}</button>`).join('')}</nav>`;
+}
+function tCard(t) {
+  const m = main(t).length, r = reserve(t).length, mine = t.signups.find(s => s.uid === S.me);
+  const full = m >= t.limit;
+  return `<button data-a="open" data-id="${t.id}" class="card w-full text-left fade ${t.status === 'cancelled' ? 'opacity-60' : ''}">
+    <div class="flex justify-between gap-2"><div class="min-w-0"><p class="text-xs font-bold uppercase text-indigo-600">${fDay(t.start)}</p><p class="font-semibold truncate">${t.title}</p>
+    <p class="text-xs text-slate-500">🕖 ${fTime(t.start)}–${fTime(t.end)} · 📍 ${CLUB.place}</p></div>
+    <div class="flex flex-col items-end gap-1">${t.status === 'cancelled' ? '<span class="chip bg-red-100 text-red-700">Odwołany</span>' : ''}${statusChip(t)}${badge(mine && mine.status)}</div></div>
+    <div class="mt-3 flex justify-between text-xs"><span class="font-semibold ${full ? 'text-red-600' : 'text-slate-700'}">Zapisani: ${m} / ${t.limit} miejsc</span>${r ? `<span class="font-semibold text-amber-600">Rezerwa: ${r}</span>` : ''}</div>
+    <div class="mt-1 h-1.5 rounded-full bg-slate-100 overflow-hidden"><div class="h-full rounded-full ${full ? 'bg-red-500' : 'bg-indigo-500'}" style="width:${Math.min(100, m / t.limit * 100)}%"></div></div></button>`;
+}
+function statusChip(t) {
+  if (t.status === 'settled') return isStaff() ? '<span class="chip bg-emerald-100 text-emerald-700">✓ Obecność sprawdzona</span>' : '<span class="chip bg-slate-100 text-slate-600">Zakończony</span>';
+  if (t.status === 'scheduled' && t.start < Date.now() && isStaff()) return '<span class="chip bg-amber-100 text-amber-700">Obecność niesprawdzona</span>';
+  return '';
+}
+function badge(s) { return s === 'main' ? '<span class="chip bg-emerald-100 text-emerald-700">Jesteś zapisany</span>' : s === 'reserve' ? '<span class="chip bg-amber-100 text-amber-700">Rezerwa</span>' : s === 'late' ? '<span class="chip bg-slate-100 text-slate-600">Wypisany po terminie</span>' : ''; }
+function trainingsView() {
+  const now = Date.now();
+  const up = D.trainings.filter(t => t.end > now - 3 * 36e5 && t.start > now - 3 * 36e5).sort((a, b) => a.start - b.start);
+  const toSettle = D.trainings.filter(t => t.status === 'scheduled' && t.start < now).sort((a, b) => b.start - a.start);
+  let body;
+  if (S.view === 'list') {
+    body = (isStaff() && toSettle.length ? `<p class="text-sm font-semibold text-amber-700 mb-2">📋 Obecność do sprawdzenia (${toSettle.length})</p><div class="space-y-3 mb-5">${toSettle.map(tCard).join('')}</div>` : '') +
+      `<div class="space-y-3">${up.map(tCard).join('')}</div>`;
+  } else body = calendar();
+  return `<div class="flex justify-between items-start mb-4"><div><h1 class="text-xl font-bold">Treningi</h1><p class="text-sm text-slate-500">${me().billing === 'per_session' ? `Płacisz za trening: ${FEE} zł` : 'Masz abonament miesięczny'}</p></div>
+    ${isStaff() ? '<button data-a="newTraining" class="btn bg-indigo-600 text-white">+ Nowy</button>' : ''}</div>
+    <div class="grid grid-cols-2 bg-slate-100 rounded-xl p-1 text-sm font-semibold mb-4"><button data-a="view" data-v="list" class="py-2 rounded-lg ${S.view === 'list' ? 'bg-white shadow' : 'text-slate-500'}">☰ Nadchodzące</button><button data-a="view" data-v="cal" class="py-2 rounded-lg ${S.view === 'cal' ? 'bg-white shadow' : 'text-slate-500'}">📅 Kalendarz</button></div>${body}`;
+}
+function calendar() {
+  const m = S.month, first = new Date(m.getFullYear(), m.getMonth(), 1), off = (first.getDay() + 6) % 7, days = new Date(m.getFullYear(), m.getMonth() + 1, 0).getDate();
+  const cells = []; for (let i = 0; i < off; i++) cells.push(null); for (let d = 1; d <= days; d++) cells.push(new Date(m.getFullYear(), m.getMonth(), d));
+  const today = dayKey(new Date());
+  const grid = cells.map(d => { if (!d) return '<div></div>'; const k = dayKey(d); const list = D.trainings.filter(t => dayKey(t.start) === k);
+    const mine = list.some(t => t.signups.some(s => s.uid === S.me && s.status !== 'late')); const sel = S.day === k;
+    return `<button data-a="day" data-v="${k}" class="relative aspect-square rounded-xl text-sm flex items-center justify-center ${sel ? 'bg-indigo-600 text-white font-bold' : list.length ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-slate-600'} ${k === today && !sel ? 'ring-2 ring-indigo-300' : ''}">${d.getDate()}${list.length ? `<span class="absolute bottom-1 w-1.5 h-1.5 rounded-full ${sel ? 'bg-white' : mine ? 'bg-emerald-500' : 'bg-indigo-500'}"></span>` : ''}</button>`; }).join('');
+  const dayList = S.day ? D.trainings.filter(t => dayKey(t.start) === S.day) : [];
+  return `<div class="card p-3 fade"><div class="flex justify-between items-center mb-2"><button data-a="month" data-v="-1" class="px-3 py-1 text-lg">‹</button><b class="capitalize">${m.toLocaleDateString('pl-PL', { month: 'long', year: 'numeric' })}</b><button data-a="month" data-v="1" class="px-3 py-1 text-lg">›</button></div>
+    <div class="grid grid-cols-7 text-center text-xs font-semibold text-slate-400 mb-1">${['Pn', 'Wt', 'Śr', 'Cz', 'Pt', 'Sb', 'Nd'].map(x => `<div>${x}</div>`).join('')}</div><div class="grid grid-cols-7 gap-1">${grid}</div>
+    <p class="mt-2 text-[11px] text-slate-500">🔵 trening · 🟢 jesteś zapisany</p></div>
+    ${S.day ? `<div class="mt-4 space-y-3">${dayList.length ? dayList.map(tCard).join('') : '<div class="card text-sm text-slate-500">Brak treningów tego dnia.</div>'}</div>` : '<p class="mt-3 text-center text-sm text-slate-400">Kliknij dzień, aby zobaczyć treningi</p>'}`;
+}
+function personRow(s, i, right = '') {
+  const m = mem(s.uid);
+  return `<li class="flex items-center gap-3 py-2.5">${i ? `<span class="w-5 text-right text-xs font-bold text-slate-400">${i}.</span>` : ''}${avatar(m.name, 'w-8 h-8')}
+    <div class="flex-1 min-w-0"><p class="text-sm font-medium truncate ${s.uid === S.me ? 'text-indigo-700' : ''}">${m.name}${s.uid === S.me ? ' (Ty)' : ''}</p>${s.staff ? '<p class="text-[11px] text-slate-400">dopisany przez opiekuna</p>' : ''}</div>
+    ${s.car ? '🚗' : ''}${s.beer ? '🍺' : ''}${right}</li>`;
+}
+function trainingView() {
+  const t = tr(S.tid); const ma = main(t), re = reserve(t), la = late(t), mine = t.signups.find(s => s.uid === S.me);
+  const open = t.status === 'scheduled' && t.start > Date.now();
+  const cars = ma.filter(s => s.car).length, beers = ma.filter(s => s.beer).length;
+  const rm = uid => isStaff() && t.status === 'scheduled' && !S.att ? `<button data-a="removeSign" data-id="${uid}" class="text-slate-300 px-1 text-lg">×</button>` : '';
+  let html = `<button data-a="back" class="text-sm text-slate-500 flex items-center gap-1 mb-3">${I.back} Treningi</button>
+  <div class="card mb-4 fade"><div class="flex justify-between gap-2"><div><p class="text-xs font-bold uppercase text-indigo-600">${fLong(t.start)}</p><h1 class="text-xl font-bold">${t.title}</h1>
+  <p class="text-sm text-slate-500 mt-1">🕖 ${fTime(t.start)}–${fTime(t.end)}<br>📍 ${CLUB.place}</p></div><div class="flex flex-col items-end gap-1">${statusChip(t)}${t.status === 'cancelled' ? '<span class="chip bg-red-100 text-red-700">Odwołany</span>' : ''}${badge(mine && mine.status)}</div></div>
+  <div class="grid grid-cols-4 gap-2 mt-4 text-center">
+   <div class="rounded-xl bg-indigo-50 p-2"><p class="font-bold text-indigo-700">${ma.length}/${t.limit}</p><p class="text-[10px] text-indigo-600">Zapisani</p></div>
+   <div class="rounded-xl bg-amber-50 p-2"><p class="font-bold text-amber-700">${re.length}</p><p class="text-[10px] text-amber-600">Rezerwa</p></div>
+   <div class="rounded-xl bg-sky-50 p-2"><p class="font-bold text-sky-700">${cars}</p><p class="text-[10px] text-sky-600">🚗 Autem</p></div>
+   <div class="rounded-xl bg-orange-50 p-2"><p class="font-bold text-orange-700">${beers}</p><p class="text-[10px] text-orange-600">🍺 Integracja</p></div></div>`;
+  if (!S.att) {
+    if (open && (!mine || mine.status === 'late')) html += `<button data-a="join" class="btn w-full mt-4 py-3 bg-indigo-600 text-white">${ma.length >= t.limit ? 'Zapisz mnie na listę rezerwową' : 'Zapisz się na trening'}</button>`;
+    if (open && mine && mine.status !== 'late') html += `<div class="grid grid-cols-2 gap-2 mt-4">
+      <button data-a="flag" data-v="car" class="btn py-3 ${mine.car ? 'bg-sky-600 text-white' : 'bg-white border border-slate-200'}">🚗 ${mine.car ? 'Będę autem' : 'Autem?'}</button>
+      <button data-a="flag" data-v="beer" class="btn py-3 ${mine.beer ? 'bg-amber-500 text-white' : 'bg-white border border-slate-200'}">🍺 ${mine.beer ? 'Zostaję na piwo' : 'Integracja?'}</button></div>
+      <p class="text-center text-[11px] text-slate-400 mt-2">🚗 = mogę kogoś zabrać · 🍺 = zostaję po treningu</p>
+      <button data-a="leave" class="btn w-full mt-3 bg-white border border-slate-200 text-red-600">Wypisz mnie</button>`;
+    if (t.status === 'scheduled' && !open && !isStaff()) html += '<p class="mt-4 text-center text-sm text-slate-500">Trening już się odbył – obecność sprawdza Opiekun.</p>';
+  }
+  html += '</div>';
+  if (S.att) {
+    const x = settleCalc();
+    html += `<div class="card mb-4 border-emerald-300 fade"><div class="flex justify-between mb-1"><h2 class="font-semibold">Sprawdzanie obecności</h2><button data-a="cancelAtt" class="text-sm text-slate-500">Anuluj</button></div>
+    <p class="text-xs text-slate-500 mb-2">Zaznacz osoby faktycznie obecne. Kogoś nie ma w aplikacji, a przyszedł? Dodaj go poniżej.</p>
+    <ul class="divide-y divide-slate-100">${[...ma, ...re].map(s => personRow(s, 0, `${s.status === 'reserve' ? '<span class="chip bg-amber-100 text-amber-700">rezerwa</span>' : ''}<input type="checkbox" data-a="togglePresent" data-id="${s.uid}" ${S.att.present.has(s.uid) ? 'checked' : ''}>`)).join('')}</ul>
+    ${la.length ? `<p class="text-sm font-semibold text-slate-600 mt-3">Wypisani po terminie</p><ul class="divide-y divide-slate-100">${la.map(s => personRow(s, 0, `<label class="text-[11px] flex items-center gap-1 text-slate-600"><input type="checkbox" style="width:1rem;height:1rem;accent-color:#dc2626" data-a="toggleLate" data-id="${s.uid}" ${S.att.late.has(s.uid) ? 'checked' : ''}>obciąż ${FEE} zł</label><input type="checkbox" data-a="togglePresent" data-id="${s.uid}" ${S.att.present.has(s.uid) ? 'checked' : ''}>`)).join('')}</ul>` : ''}
+    <button data-a="pick" data-v="att" class="btn w-full mt-3 border-2 border-dashed border-slate-300 text-slate-700">+ Dodaj osobę z klubu (niezapisaną w apce)</button>
+    <div class="rounded-xl bg-slate-50 p-3 mt-3 text-sm">Obecnych: <b>${x.present.length}</b> (zapisanych na liście głównej: ${ma.length})</div>
+    <button data-a="settle" class="btn w-full mt-3 py-3 bg-emerald-600 text-white">✅ Zatwierdź obecność</button></div>`;
+  } else {
+    html += `<div class="card mb-4"><div class="flex justify-between"><h2 class="font-semibold">Lista główna</h2><span class="text-sm text-slate-500">${ma.length} / ${t.limit}</span></div>
+      ${ma.length ? `<ul class="divide-y divide-slate-100">${ma.map((s, i) => personRow(s, i + 1, rm(s.uid))).join('')}</ul>` : '<p class="py-4 text-center text-sm text-slate-400">Nikt jeszcze się nie zapisał.</p>'}</div>`;
+    if (re.length) html += `<div class="card mb-4 border-amber-200"><h2 class="font-semibold text-amber-700">Lista rezerwowa (${re.length})</h2><p class="text-xs text-slate-500">Kolejność zgłoszeń – pierwsza osoba awansuje automatycznie.</p><ul class="divide-y divide-slate-100">${re.map((s, i) => personRow(s, i + 1, rm(s.uid))).join('')}</ul></div>`;
+    if (la.length) html += `<div class="card mb-4"><h2 class="text-sm font-semibold text-slate-500">Wypisani po terminie</h2><ul class="divide-y divide-slate-100">${la.map(s => personRow(s, 0, rm(s.uid))).join('')}</ul></div>`;
+    if (t.status === 'settled' && t.attendance) html += `<div class="card mb-4"><h2 class="font-semibold mb-2">Obecność sprawdzona</h2><div class="flex flex-wrap gap-1.5">${t.signups.map(s => `<span class="chip ${t.attendance.has(s.uid) ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-400 line-through'}">${mem(s.uid).name}</span>`).join('')}</div></div>`;
+    if (isStaff() && t.status === 'scheduled') html += `<div class="card mb-4 space-y-2"><h2 class="font-semibold">Panel opiekuna</h2>
+      <button data-a="startAtt" class="btn w-full py-3 bg-emerald-600 text-white">📋 Sprawdź obecność</button>
+      <button data-a="pick" data-v="list" class="btn w-full bg-white border border-slate-200">👤+ Dopisz osobę z klubu</button>
+      <button data-a="cancelTraining" class="btn w-full bg-white border border-slate-200 text-red-600">Odwołaj trening</button></div>`;
+  }
+  return html;
+}
+function financeView() {
+  const b = balance(S.me), items = D.tx.filter(x => x.uid === S.me).sort((a, c) => a.date - c.date);
+  let run = 0; const rows = items.map(x => { run += x.amount; return { x, run }; }).reverse();
+  const title = `${me().code} ${me().name}`;
+  const field = (l, v, mono) => `<div><span class="label">${l}</span><button data-a="copy" data-v="${v}" class="w-full flex justify-between items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-left text-sm ${mono ? 'font-mono' : 'font-medium'}"><span>${v}</span><span class="text-slate-400">${I.copy}</span></button></div>`;
+  return `<h1 class="text-xl font-bold">Moje finanse</h1><p class="text-sm text-slate-500 mb-4">${CLUB.name}</p>
+  <div class="card text-center mb-4 fade ${b < 0 ? 'bg-red-50 border-red-200' : 'bg-emerald-50 border-emerald-200'}"><p class="text-sm text-slate-600">Twoje saldo w klubie</p><p class="text-4xl font-bold my-1 ${b < 0 ? 'text-red-600' : 'text-emerald-600'}">${money(b)}</p>
+  <p class="text-sm ${b < 0 ? 'text-red-700' : 'text-emerald-700'}">${b < 0 ? 'Do zapłaty: ' + money(-b) : b > 0 ? 'Nadpłata – masz środki na kolejne treningi' : 'Wszystko rozliczone'}</p>
+  <p class="text-xs text-slate-500 mt-2">Tryb: ${me().billing === 'monthly' ? `abonament (${money(MONTHLY)}/mies.)` : `płatność za trening (${money(FEE)})`}</p></div>
+  <div class="card mb-4 space-y-3"><h2 class="font-semibold">🏦 Dane do przelewu</h2>${field('Odbiorca', CLUB.recipient)}${field('Numer konta', CLUB.account, true)}${field('Tytuł przelewu (wymagany)', title)}${b < 0 ? field('Sugerowana kwota', (-b).toFixed(2).replace('.', ',')) : ''}
+  <p class="text-xs text-slate-500">Wpisz kod <b>${me().code}</b> w tytule – wpłata przypisze się automatycznie.</p></div>
+  <div class="card"><h2 class="font-semibold mb-1">Historia wpłat i obciążeń</h2><ul class="divide-y divide-slate-100">${rows.map(({ x, run }) => `<li class="flex justify-between py-3 gap-3"><div class="min-w-0"><p class="text-sm font-medium truncate">${x.desc}</p><p class="text-xs text-slate-500">${fDate(x.date)}</p></div><div class="text-right"><p class="text-sm font-semibold ${x.amount > 0 ? 'text-emerald-600' : 'text-red-600'}">${x.amount > 0 ? '+' : ''}${money(x.amount)}</p><p class="text-[11px] text-slate-400">saldo ${money(run)}</p></div></li>`).join('') || '<li class="py-6 text-center text-sm text-slate-400">Brak operacji</li>'}</ul></div>`;
+}
+function adminView() {
+  if (S.sub === 'members') return membersView();
+  if (S.sub === 'payments') return paymentsView();
+  if (S.sub === 'import') return importView();
+  const pend = D.members.filter(m => m.status === 'pending').length;
+  const tile = (v, ic, t, d, alert) => `<button data-a="sub" data-v="${v}" class="card w-full flex items-center gap-3 text-left"><span class="w-11 h-11 rounded-xl flex items-center justify-center text-xl ${alert ? 'bg-red-50' : 'bg-indigo-50'}">${ic}</span><span class="flex-1"><b class="block">${t}</b><span class="text-xs ${alert ? 'text-red-600 font-semibold' : 'text-slate-500'}">${d}</span></span><span class="text-slate-300 text-xl">›</span></button>`;
+  return `<h1 class="text-xl font-bold mb-4">Zarządzanie klubem</h1><div class="space-y-3 fade">
+    ${tile('members', '👥', 'Członkowie', pend ? pend + ' oczekuje na akceptację' : 'Role, tryby rozliczeń, aliasy', pend)}
+    ${tile('payments', '💰', 'Rozliczenia', 'Salda, składki miesięczne')}
+    ${tile('import', '📄', 'Import wyciągu CSV', 'Automatyczne księgowanie przelewów')}</div>
+    <div class="card mt-5 space-y-2"><h2 class="font-semibold">Link zapraszający</h2><p class="text-sm text-slate-500">Wyślij nowym zawodnikom – po zalogowaniu czekają na Twoją akceptację.</p>
+    <button data-a="copy" data-v="https://klub.twojadomena.pl/join/VCA-START2026" class="w-full text-left rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-medium break-all">https://klub.twojadomena.pl/join/VCA-START2026</button></div>`;
+}
+const subBack = '<button data-a="sub" data-v="" class="text-sm text-slate-500 flex items-center gap-1 mb-3">' + I.back + ' Zarządzanie</button>';
+function membersView() {
+  const pend = D.members.filter(m => m.status === 'pending'), act = D.members.filter(m => m.status === 'active');
+  return subBack + `<h1 class="text-xl font-bold mb-4">Członkowie <span class="text-sm font-normal text-slate-500">(${act.length})</span></h1>
+  ${pend.length ? `<p class="text-sm font-semibold text-red-600 mb-2">Oczekujący na akceptację</p><div class="space-y-2 mb-5">${pend.map(m => `<div class="card flex items-center gap-2 border-amber-200 fade">${avatar(m.name)}<b class="flex-1 text-sm">${m.name}</b><button data-a="approve" data-id="${m.id}" class="btn py-1.5 px-3 text-xs bg-emerald-600 text-white">Akceptuj</button><button data-a="reject" data-id="${m.id}" class="btn py-1.5 px-3 text-xs bg-white border border-slate-200">✕</button></div>`).join('')}</div>` : ''}
+  <div class="space-y-2">${act.map(m => { const b = balance(m.id); return `<div class="card p-3"><div class="flex items-center gap-3">${avatar(m.name)}<div class="flex-1 min-w-0"><p class="text-sm font-medium truncate">${m.name} <span class="text-xs text-slate-400">${m.code}</span></p>
+    <div class="flex gap-1 mt-0.5"><span class="chip ${m.role === 'owner' ? 'bg-indigo-100 text-indigo-700' : m.role === 'caretaker' ? 'bg-sky-100 text-sky-700' : 'bg-slate-100 text-slate-600'}">${{ owner: 'Właściciel', caretaker: 'Opiekun', member: 'Zawodnik' }[m.role]}</span></div></div>
+    <span class="text-sm font-semibold ${b < 0 ? 'text-red-600' : 'text-emerald-600'}">${money(b)}</span></div>
+    <div class="flex gap-2 mt-2"><button data-a="billing" data-id="${m.id}" class="btn flex-1 py-1.5 text-xs bg-slate-50 border border-slate-200">${m.billing === 'monthly' ? '📆 Abonament' : '🎟️ Za trening'} ⇄</button>${m.role !== 'owner' ? `<button data-a="caretaker" data-id="${m.id}" class="btn flex-1 py-1.5 text-xs ${m.role === 'caretaker' ? 'bg-sky-600 text-white' : 'bg-slate-50 border border-slate-200'}">${m.role === 'caretaker' ? '✓ Opiekun' : 'Nadaj Opiekuna'}</button>` : ''}</div>
+    ${m.aliases.length ? `<p class="text-[11px] text-slate-500 mt-1.5">Aliasy przelewów: ${m.aliases.join(', ')}</p>` : ''}</div>`; }).join('')}</div>`;
+}
+function paymentsView() {
+  const act = D.members.filter(m => m.status === 'active').map(m => ({ m, b: balance(m.id) })).sort((a, c) => a.b - c.b);
+  const debt = act.reduce((s, x) => s + Math.min(0, x.b), 0);
+  return subBack + `<h1 class="text-xl font-bold">Rozliczenia</h1><p class="text-sm text-slate-500 mb-4">Łączne zadłużenie: <b class="text-red-600">${money(debt)}</b></p>
+  <div class="card mb-4"><h2 class="font-semibold">📆 Składki miesięczne</h2><p class="text-xs text-slate-500 my-1">Abonentów: ${act.filter(x => x.m.billing === 'monthly').length} · stawka ${money(MONTHLY)}. Ponowne naliczenie tego samego miesiąca jest zablokowane.</p>
+  <button data-a="chargeMonth" class="btn w-full mt-2 bg-indigo-600 text-white">Nalicz składkę za ${new Date().toLocaleDateString('pl-PL', { month: 'long' })}</button></div>
+  <div class="card p-0"><ul class="divide-y divide-slate-100">${act.map(({ m, b }) => `<li class="flex items-center gap-3 px-4 py-3">${avatar(m.name, 'w-8 h-8')}<div class="flex-1 min-w-0"><p class="text-sm font-medium truncate">${m.name}</p><p class="text-xs text-slate-500">${m.code} · ${m.billing === 'monthly' ? 'abonament' : 'za trening'}</p></div><b class="text-sm ${b < 0 ? 'text-red-600' : 'text-emerald-600'}">${money(b)}</b></li>`).join('')}</ul></div>`;
+}
+function importView() {
+  let h = subBack + `<h1 class="text-xl font-bold">Import wyciągu CSV</h1><p class="text-sm text-slate-500 mb-4">Plik z banku jest analizowany w telefonie/komputerze – do bazy trafiają tylko zatwierdzone wpłaty.</p>`;
+  if (!S.importRows) return h + `<button data-a="loadCsv" class="card w-full border-2 border-dashed border-slate-300 py-8 text-center"><p class="text-3xl">📄</p><p class="font-semibold mt-1">Wczytaj przykładowy wyciąg</p><p class="text-xs text-slate-500">W prawdziwej aplikacji wybierasz plik CSV z banku</p></button>`;
+  const sel = S.importRows.filter(r => r.sel && r.uid && !r.dup);
+  h += `<div class="card p-0 fade"><div class="p-4 border-b border-slate-100"><b>Podgląd wpływów (${S.importRows.length})</b><p class="text-xs text-slate-500">Dopasowano: ${S.importRows.filter(r => r.uid).length} · już zaksięgowane: ${S.importRows.filter(r => r.dup).length}</p></div>
+  <ul class="divide-y divide-slate-100">${S.importRows.map(r => `<li class="p-4 flex gap-3 ${r.dup ? 'opacity-50' : ''}"><input type="checkbox" data-a="importSel" data-i="${r.i}" ${r.sel ? 'checked' : ''} ${r.dup || !r.uid ? 'disabled' : ''} style="accent-color:#4f46e5">
+   <div class="flex-1 min-w-0"><p class="text-sm font-medium">${r.title}</p><p class="text-xs text-slate-500">${fDate(r.date)} · ${r.sender}</p>
+   <p class="text-xs mt-1">${r.uid ? `→ <b>${mem(r.uid).code} ${mem(r.uid).name}</b> <span class="chip bg-emerald-100 text-emerald-700">${r.dup ? 'zaksięgowano' : r.reason}</span>` : '<span class="chip bg-slate-100 text-slate-500">nie przypisano</span>'}</p></div><b class="text-sm text-emerald-600">+${money(r.amount)}</b></li>`).join('')}</ul></div>
+  <button data-a="book" ${sel.length ? '' : 'disabled'} class="btn w-full mt-4 py-3 ${sel.length ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-400'}">Zaksięguj ${sel.length} wpłat (${money(sel.reduce((s, r) => s + r.amount, 0))})</button>
+  <p class="text-xs text-slate-500 mt-2 text-center">Ponowny import tego samego pliku nie zdubluje wpłat.</p>`;
+  return h;
+}
+function statsView() {
+  const p = S.period || 'month', now = new Date();
+  const from = p === 'month' ? new Date(now.getFullYear(), now.getMonth(), 1) : p === 'year' ? new Date(now.getFullYear(), 0, 1) : new Date(0);
+  const done = D.trainings.filter(t => t.status === 'settled' && t.attendance && t.start >= from);
+  const act = D.members.filter(m => m.status === 'active');
+  const st = act.map(m => { let v = 0, c = 0, b = 0; done.forEach(t => { if (t.attendance.has(m.id)) { v++; const s = t.signups.find(x => x.uid === m.id); if (s && s.car) c++; if (s && s.beer) b++; } }); return { m, visits: v, cars: c, beers: b, balance: balance(m.id) }; });
+  const board = (emoji, title, key, fmt, empty) => {
+    const sorted = st.filter(x => x[key] > 0).sort((a, c) => c[key] - a[key] || a.m.name.localeCompare(c.m.name, 'pl'));
+    let rank = 0, prev = null; sorted.forEach((x, i) => { if (x[key] !== prev) { rank = i + 1; prev = x[key]; } x['r_' + key] = rank; });
+    const top = sorted.slice(0, 10); const mine = sorted.find(x => x.m.id === S.me); const inTop = top.includes(mine);
+    return `<div class="card fade"><h2 class="font-semibold mb-2 flex items-center gap-2"><span class="text-xl">${emoji}</span>${title}</h2>
+    ${top.length ? `<ol class="divide-y divide-slate-100">${top.map(x => { const me2 = x.m.id === S.me; const r = x['r_' + key]; return `<li class="flex items-center gap-3 py-2 ${me2 ? 'bg-indigo-50 rounded-xl px-2 -mx-2' : ''}"><span class="w-7 text-center text-sm font-bold text-slate-400">${['🥇', '🥈', '🥉'][r - 1] || r + '.'}</span>${avatar(x.m.name, 'w-8 h-8')}<span class="flex-1 truncate text-sm ${me2 ? 'font-semibold text-indigo-700' : 'font-medium'}">${x.m.name}${me2 ? ' (Ty)' : ''}</span><b class="text-sm">${fmt(x[key])}</b></li>`; }).join('')}</ol>` : `<p class="py-4 text-center text-sm text-slate-400">${empty}</p>`}
+    ${mine && !inTop ? `<p class="mt-2 rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-600">Ty: <b>${mine['r_' + key]}. miejsce</b> · ${fmt(mine[key])}</p>` : ''}</div>`;
+  };
+  const me2 = st.find(x => x.m.id === S.me) || { visits: 0, cars: 0, beers: 0 };
+  const times = v => v + '×';
+  return `<h1 class="text-xl font-bold">Statystyki</h1><p class="text-sm text-slate-500 mb-3">Treningi ze sprawdzoną obecnością: ${done.length}</p>
+  <div class="grid grid-cols-3 bg-slate-100 rounded-xl p-1 text-xs font-semibold mb-4">${[['month', 'Ten miesiąc'], ['year', 'Ten rok'], ['all', 'Od początku']].map(([v, l]) => `<button data-a="period" data-v="${v}" class="py-2 rounded-lg ${p === v ? 'bg-white shadow' : 'text-slate-500'}">${l}</button>`).join('')}</div>
+  <div class="space-y-4"><div class="card bg-indigo-50 border-indigo-200"><h2 class="font-semibold text-indigo-800 mb-2">🏆 Twoje wyniki</h2><div class="grid grid-cols-3 gap-2 text-center">
+   <div class="rounded-xl bg-white p-2"><p class="text-xl font-bold text-indigo-700">${me2.visits}</p><p class="text-[11px] text-slate-500">🏐 treningów</p></div>
+   <div class="rounded-xl bg-white p-2"><p class="text-xl font-bold text-sky-700">${me2.cars}</p><p class="text-[11px] text-slate-500">🚗 autem</p></div>
+   <div class="rounded-xl bg-white p-2"><p class="text-xl font-bold text-amber-600">${me2.beers}</p><p class="text-[11px] text-slate-500">🍺 integracji</p></div></div></div>
+  ${board('🏐', 'Najwięcej treningów', 'visits', times, 'Brak treningów ze sprawdzoną obecnością w tym okresie.')}
+  ${board('🚗', 'Najczęściej autem', 'cars', times, 'Nikt jeszcze nie przyjechał autem.')}
+  ${board('🍺', 'Najczęściej na integracji', 'beers', times, 'Jeszcze nikt nie został na integracji.')}
+  ${board('💰', 'Najwyższe saldo', 'balance', v => money(v), 'Nikt nie ma jeszcze nadpłaty.')}
+  <p class="text-center text-xs text-slate-400">Liczą się treningi z zatwierdzoną obecnością. Ranking salda pokazuje tylko nadpłaty.</p></div>`;
+}
+function teamView() {
+  const all = D.members.filter(m => m.status === 'active').map(m => ({ m, b: balance(m.id) }));
+  const debt = all.filter(x => x.b < 0).length; const f = S.teamFilter || 'all';
+  const list = all.filter(x => f === 'all' || x.b < 0).sort((a, c) => a.m.name.localeCompare(c.m.name, 'pl'));
+  return `<h1 class="text-xl font-bold">Zespół</h1><p class="text-sm text-slate-500 mb-3">Członków: ${all.length} · do zapłaty ma ${debt} os.</p>
+  <div class="flex gap-2 mb-3"><button data-a="teamFilter" data-v="all" class="btn py-1.5 px-3 text-xs ${f === 'all' ? 'bg-indigo-600 text-white' : 'bg-white border border-slate-200'}">Wszyscy</button><button data-a="teamFilter" data-v="debt" class="btn py-1.5 px-3 text-xs ${f === 'debt' ? 'bg-indigo-600 text-white' : 'bg-white border border-slate-200'}">Do zapłaty (${debt})</button></div>
+  <div class="card p-0 fade"><ul class="divide-y divide-slate-100">${list.map(({ m, b }) => `<li><button data-a="history" data-id="${m.id}" class="w-full flex items-center gap-3 px-4 py-3 text-left">${avatar(m.name)}<div class="flex-1 min-w-0"><p class="text-sm font-medium truncate">${m.name} <span class="text-xs text-slate-400">${m.code}</span></p>
+   <div class="flex gap-1 mt-0.5"><span class="chip ${m.billing === 'monthly' ? 'bg-violet-100 text-violet-700' : 'bg-slate-100 text-slate-600'}">${m.billing === 'monthly' ? 'abonament' : 'za trening'}</span>${m.role !== 'member' ? `<span class="chip bg-sky-100 text-sky-700">${m.role === 'owner' ? 'Właściciel' : 'Opiekun'}</span>` : ''}</div></div>
+   <div class="text-right"><b class="text-sm ${b < 0 ? 'text-red-600' : 'text-emerald-600'}">${money(b)}</b><p class="text-[10px] text-slate-400">${b < 0 ? 'do zapłaty' : b > 0 ? 'nadpłata' : 'rozliczony'}</p></div></button></li>`).join('')}</ul></div>
+  <p class="text-xs text-slate-400 text-center mt-3">Kliknij osobę, aby zobaczyć historię wpłat i obciążeń.</p>`;
+}
+function modal() {
+  const md = S.modal; if (!md) return '';
+  let inner;
+  if (md.history) {
+    const m = mem(md.history), b = balance(m.id); let run = 0;
+    const rows = D.tx.filter(x => x.uid === m.id).sort((a, c) => a.date - c.date).map(x => { run += x.amount; return { x, run }; }).reverse();
+    inner = `<h2 class="font-semibold">${m.name}</h2><p class="text-xs text-slate-500 mb-3">${m.code} · ${m.billing === 'monthly' ? 'abonament miesięczny' : 'płatność za trening'}</p>
+    <div class="rounded-xl p-3 text-center mb-2 ${b < 0 ? 'bg-red-50' : 'bg-emerald-50'}"><p class="text-2xl font-bold ${b < 0 ? 'text-red-600' : 'text-emerald-600'}">${money(b)}</p><p class="text-xs text-slate-500">saldo</p></div>
+    <ul class="divide-y divide-slate-100 max-h-[45vh] overflow-y-auto">${rows.map(({ x, run }) => `<li class="flex justify-between py-2.5 gap-3"><div class="min-w-0"><p class="text-sm truncate">${x.desc}</p><p class="text-xs text-slate-500">${fDate(x.date)}</p></div><div class="text-right"><p class="text-sm font-semibold ${x.amount > 0 ? 'text-emerald-600' : 'text-red-600'}">${x.amount > 0 ? '+' : ''}${money(x.amount)}</p><p class="text-[10px] text-slate-400">saldo ${money(run)}</p></div></li>`).join('') || '<li class="py-4 text-center text-sm text-slate-400">Brak operacji</li>'}</ul>
+    <button data-a="closeModal" class="btn w-full mt-3 bg-white border border-slate-200">Zamknij</button>`;
+  } else if (md.picker) {
+    const t = tr(S.tid); const taken = new Set(t.signups.filter(s => s.status !== 'late').map(s => s.uid));
+    const list = D.members.filter(m => m.status === 'active' && !taken.has(m.id));
+    inner = `<h2 class="font-semibold mb-3">${md.picker === 'att' ? 'Dodaj obecną osobę (niezapisaną w apce)' : 'Dopisz osobę do treningu'}</h2><ul class="divide-y divide-slate-100 max-h-[50vh] overflow-y-auto">${list.map(m => `<li><button data-a="add" data-id="${m.id}" class="w-full flex items-center gap-3 py-2.5 text-left">${avatar(m.name, 'w-8 h-8')}<span class="flex-1"><span class="block text-sm font-medium">${m.name}</span><span class="text-xs text-slate-500">${m.code} · ${m.billing === 'monthly' ? 'abonament' : 'za trening'}</span></span><span class="text-indigo-600 font-bold">+</span></button></li>`).join('') || '<li class="py-6 text-center text-sm text-slate-400">Wszyscy są już na liście</li>'}</ul>
+    <button data-a="closeModal" class="btn w-full mt-3 bg-white border border-slate-200">Zamknij</button>`;
+  } else if (md.form === 'training') {
+    const d = new Date(); d.setDate(d.getDate() + 7);
+    const iso = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    const inp = 'w-full rounded-xl border border-slate-200 px-3 py-2.5 text-base';
+    inner = `<h2 class="font-semibold mb-3">Nowy trening</h2><div class="grid grid-cols-2 gap-3">
+    <div class="col-span-2"><span class="label">Nazwa</span><input id="f-title" class="${inp}" value="Trening siatkówki"></div>
+    <div><span class="label">Data</span><input id="f-date" type="date" class="${inp}" value="${iso}"></div><div><span class="label">Godzina</span><input id="f-time" type="time" class="${inp}" value="19:00"></div>
+    <div><span class="label">Limit miejsc</span><input id="f-limit" type="number" class="${inp}" value="14"></div><div><span class="label">Powtórz co tydzień</span><select id="f-rep" class="${inp}"><option value="1">tylko raz</option><option value="4">4 tygodnie</option><option value="8">8 tygodni</option></select></div></div>
+    <div class="flex gap-2 mt-4"><button data-a="closeModal" class="btn flex-1 bg-white border border-slate-200">Anuluj</button><button data-a="saveTraining" class="btn flex-1 bg-indigo-600 text-white">Zapisz</button></div>`;
+  } else {
+    inner = `<h2 class="font-semibold mb-2">${md.title}</h2><div class="text-sm text-slate-700 leading-relaxed">${md.body}</div>
+    <div class="flex gap-2 mt-5"><button data-a="closeModal" class="btn flex-1 bg-white border border-slate-200">Anuluj</button><button data-a="confirm" class="btn flex-1 text-white ${md.danger ? 'bg-red-600' : 'bg-indigo-600'}">${md.ok}</button></div>`;
+  }
+  return `<div class="fixed inset-0 z-50 flex items-end sm:items-center justify-center"><div data-a="closeModal" class="absolute inset-0 bg-slate-900/50"></div><div class="relative w-full max-w-[430px] bg-white rounded-t-2xl sm:rounded-2xl p-5 fade">${inner}</div></div>`;
+}
+function intro() {
+  if (!S.intro) return '';
+  return `<div class="fixed inset-0 z-[60] flex items-center justify-center p-5"><div class="absolute inset-0 bg-slate-900/60"></div><div class="relative bg-white rounded-2xl p-6 max-w-sm fade">
+  <div class="w-14 h-14 rounded-2xl bg-indigo-600 text-white flex items-center justify-center mx-auto mb-3">${I.ball.replace('w-5 h-5', 'w-8 h-8')}</div>
+  <h2 class="text-xl font-bold text-center">Klubowicz – demo</h2><p class="text-sm text-slate-600 mt-2 text-center">Tak będzie działać aplikacja klubu na telefonie. Dane są przykładowe – możesz klikać śmiało.</p>
+  <ul class="text-sm text-slate-700 mt-4 space-y-2"><li>👤 <b>Zawodnik</b> – zapis na trening, 🚗 / 🍺, saldo, statystyki TOP</li><li>🧑‍🏫 <b>Opiekun</b> – sprawdzanie obecności, cały zespół i stan kont</li><li>👑 <b>Właściciel</b> – członkowie, składki, import przelewów z banku</li></ul>
+  <p class="text-xs text-slate-500 mt-3">Rolę zmieniasz przełącznikiem na górze ekranu.</p><button data-a="closeIntro" class="btn w-full mt-4 py-3 bg-indigo-600 text-white">Zaczynamy</button></div></div>`;
+}
+function render() {
+  let body = S.tab === 'stats' ? statsView() : S.tab === 'team' ? teamView() : S.tab === 'finance' ? financeView() : S.tab === 'admin' ? adminView() : S.tid ? trainingView() : trainingsView();
+  const t = S.toast;
+  $('#app').innerHTML = header() + `<main class="p-4 scroll">${body}</main>` + nav() + modal() + intro() +
+    (t ? `<div class="fixed top-28 left-1/2 -translate-x-1/2 z-[70] w-[92%] max-w-[400px] rounded-xl px-4 py-3 text-sm text-white shadow-lg fade ${t.kind === 'err' ? 'bg-red-600' : t.kind === 'info' ? 'bg-slate-800' : 'bg-emerald-600'}">${t.text}</div>` : '');
+}
+document.addEventListener('click', e => {
+  const el = e.target.closest('[data-a]'); if (!el) return;
+  const fn = A[el.dataset.a]; if (!fn) return;
+  if (el.tagName !== 'INPUT') e.preventDefault();
+  fn(el.dataset); render();
+});
+seed(); render();
+</script>
+</body>
+</html>

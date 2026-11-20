@@ -1,0 +1,44 @@
+# Zależności
+node_modules/
+.pnp
+.pnp.*
+
+# Build Next.js
+.next/
+out/
+build/
+dist/
+*.tsbuildinfo
+next-env.d.ts
+
+# Zmienne środowiskowe i sekrety – NIGDY nie commituj
+.env
+.env.*
+!.env.example
+
+# Lokalna konfiguracja runtime z prawdziwymi kluczami (kopia robocza)
+public/config.local.js
+
+# Paczki do wgrania na FTP
+*.zip
+
+# Logi i systemowe
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.DS_Store
+Thumbs.db
+*.pem
+
+# IDE
+.vscode/
+.idea/
+
+# Vercel / Cloudflare (gdybyś kiedyś z nich korzystał)
+.vercel
+.wrangler/
+
+# Stare kopie / gotowe paczki (nie do repozytorium)
+_stare/
+paczki/
