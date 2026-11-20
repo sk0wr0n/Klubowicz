@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
-import { popNext } from '@/lib/nav';
+import { popNext, safePath } from '@/lib/nav';
 import { ErrorBox, FullScreenLoader } from '@/components/ui';
 
 /**
@@ -34,7 +34,9 @@ export default function AuthCallbackPage() {
       .then(({ data }) => {
         if (cancelled) return;
         if (data.session) {
-          router.replace(popNext() ?? '/');
+          const fromLink = safePath(url.searchParams.get('next'));
+          const stored = popNext();
+          router.replace(fromLink ?? stored ?? '/');
         } else {
           setError(
             'Nie udało się zalogować. Link mógł wygasnąć albo został już użyty (działa tylko najnowszy link z e-maila). Wróć do logowania i wyślij nowy link.'

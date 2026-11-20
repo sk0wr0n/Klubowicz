@@ -15,6 +15,17 @@ export function setNext(path: string): void {
   safeStorage()?.setItem(NEXT_KEY, path);
 }
 
+/** Bezpieczna ścieżka względna (bez przekierowań na inne domeny). */
+export function safePath(v: string | null | undefined): string | null {
+  if (v && v.startsWith('/') && !v.startsWith('//') && !v.includes('\\')) return v;
+  return null;
+}
+
+/** Odczyt bez usuwania – np. żeby dołączyć cel do linku w e-mailu. */
+export function peekNext(): string | null {
+  return safePath(safeStorage()?.getItem(NEXT_KEY) ?? null);
+}
+
 export function popNext(): string | null {
   const s = safeStorage();
   const v = s?.getItem(NEXT_KEY) ?? null;

@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Mail, Volleyball } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { errMsg, isGoogleEnabled, supabase } from '@/lib/supabase';
-import { popNext } from '@/lib/nav';
+import { peekNext, popNext } from '@/lib/nav';
 import { ErrorBox, Spinner } from '@/components/ui';
 
 function GoogleIcon() {
@@ -37,7 +37,12 @@ export default function LoginPage() {
     if (ready && session) router.replace(popNext() ?? '/');
   }, [ready, session, router]);
 
-  const redirectTo = () => `${window.location.origin}/auth/callback/`;
+  // Cel po zalogowaniu (np. /join/?code=VCA-…) jedzie w samym linku z e-maila,
+  // więc działa także wtedy, gdy link zostanie otwarty w innej przeglądarce lub na innym urządzeniu.
+  const redirectTo = () => {
+    const next = peekNext();
+    return `${window.location.origin}/auth/callback/${next ? `?next=${encodeURIComponent(next)}` : ''}`;
+  };
 
   async function loginGoogle() {
     setError(null);
