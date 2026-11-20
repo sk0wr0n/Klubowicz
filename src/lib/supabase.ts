@@ -5,6 +5,8 @@ declare global {
     __KLUBOWICZ_CONFIG__?: {
       supabaseUrl?: string;
       supabasePublishableKey?: string;
+      /** true = pokaż przycisk „Zaloguj przez Google” (wymaga konfiguracji Google w Supabase) */
+      enableGoogle?: boolean;
       /** starsza nazwa pola – nadal obsługiwana */
       supabaseAnonKey?: string;
       appName?: string;
@@ -42,6 +44,13 @@ export function isConfigured(): boolean {
   return !isPlaceholder(url) && !isPlaceholder(key) && /^https:\/\//.test(url);
 }
 
+/** Czy pokazywać logowanie przez Google (domyślnie wyłączone, dopóki nie jest skonfigurowane). */
+export function isGoogleEnabled(): boolean {
+  const runtime = typeof window !== 'undefined' ? window.__KLUBOWICZ_CONFIG__ : undefined;
+  if (typeof runtime?.enableGoogle === 'boolean') return runtime.enableGoogle;
+  return process.env.NEXT_PUBLIC_ENABLE_GOOGLE === 'true';
+}
+
 /** Klient Supabase (tylko w przeglądarce). */
 export function supabase(): SupabaseClient {
   if (typeof window === 'undefined') {
@@ -54,7 +63,9 @@ export function supabase(): SupabaseClient {
     }
     client = createClient(url, key, {
       auth: {
-        flowType: 'pkce',
+        // 'implicit': link z e-maila działa w każdej przeglądarce (np. wbudowanej w aplikację pocztową),
+        // a nie tylko w tej, w której poproszono o link (ograniczenie trybu PKCE).
+        flowType: 'implicit',
         persistSession: true,
         autoRefreshToken: true,
         detectSessionInUrl: true,

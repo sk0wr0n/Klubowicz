@@ -20,7 +20,12 @@ export default function AuthCallbackPage() {
     const hash = new URLSearchParams(url.hash.replace(/^#/, ''));
     const errDesc = url.searchParams.get('error_description') ?? hash.get('error_description');
     if (errDesc) {
-      setError(decodeURIComponent(errDesc.replace(/\+/g, ' ')));
+      const raw = decodeURIComponent(errDesc.replace(/\+/g, ' '));
+      setError(
+        /expired|invalid/i.test(raw)
+          ? 'Ten link logowania wygasł albo został już użyty. Działa tylko najnowszy link z e-maila – wróć do logowania i wyślij nowy.'
+          : raw
+      );
       return;
     }
     let cancelled = false;
@@ -32,7 +37,7 @@ export default function AuthCallbackPage() {
           router.replace(popNext() ?? '/');
         } else {
           setError(
-            'Nie udało się zalogować. Link mógł wygasnąć albo został otwarty w innej przeglądarce niż ta, w której o niego poproszono. Wróć do logowania i użyj kodu z e-maila lub wyślij nowy link.'
+            'Nie udało się zalogować. Link mógł wygasnąć albo został już użyty (działa tylko najnowszy link z e-maila). Wróć do logowania i wyślij nowy link.'
           );
         }
       });
@@ -46,7 +51,7 @@ export default function AuthCallbackPage() {
     <main className="mx-auto flex min-h-dvh max-w-md flex-col justify-center gap-4 p-6">
       <ErrorBox message={error} />
       <Link href="/login/" className="btn btn-primary">
-        Wróć do logowania
+        Wyślij nowy link logowania
       </Link>
     </main>
   );

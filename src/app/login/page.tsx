@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Mail, Volleyball } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
-import { errMsg, supabase } from '@/lib/supabase';
+import { errMsg, isGoogleEnabled, supabase } from '@/lib/supabase';
 import { popNext } from '@/lib/nav';
 import { ErrorBox, Spinner } from '@/components/ui';
 
@@ -27,6 +27,11 @@ export default function LoginPage() {
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [google, setGoogle] = useState(false);
+
+  useEffect(() => {
+    setGoogle(isGoogleEnabled());
+  }, []);
 
   useEffect(() => {
     if (ready && session) router.replace(popNext() ?? '/');
@@ -88,12 +93,17 @@ export default function LoginPage() {
 
         {!sent ? (
           <>
-            <button className="btn btn-secondary w-full py-3" onClick={loginGoogle} disabled={busy}>
-              <GoogleIcon /> Zaloguj przez Google
-            </button>
-            <div className="flex items-center gap-3 text-xs text-slate-400">
-              <span className="h-px flex-1 bg-slate-200" /> lub link na e-mail <span className="h-px flex-1 bg-slate-200" />
-            </div>
+            {google && (
+              <>
+                <button className="btn btn-secondary w-full py-3" onClick={loginGoogle} disabled={busy}>
+                  <GoogleIcon /> Zaloguj przez Google
+                </button>
+                <div className="flex items-center gap-3 text-xs text-slate-400">
+                  <span className="h-px flex-1 bg-slate-200" /> lub link na e-mail{' '}
+                  <span className="h-px flex-1 bg-slate-200" />
+                </div>
+              </>
+            )}
             <form onSubmit={sendLink} className="flex flex-col gap-3">
               <div>
                 <label className="label" htmlFor="email">
@@ -119,7 +129,8 @@ export default function LoginPage() {
         ) : (
           <>
             <div className="rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-              Wysłaliśmy wiadomość na <strong>{email}</strong>. Kliknij link w e-mailu, aby się zalogować.
+              Wysłaliśmy wiadomość na <strong>{email}</strong>. Kliknij link w e-mailu, aby się zalogować. Jeśli prosisz
+              o link kilka razy, działa tylko <strong>najnowszy</strong>. Sprawdź też folder Spam.
             </div>
             <p className="text-xs text-slate-500">
               Korzystasz z aplikacji dodanej do ekranu głównego telefonu? Link otworzy się w przeglądarce – wtedy wpisz
@@ -153,7 +164,7 @@ export default function LoginPage() {
       </div>
 
       <p className="text-center text-xs text-slate-400">
-        Nie przechowujemy haseł. Logowanie odbywa się przez Google lub jednorazowy link e-mail.
+        Nie przechowujemy haseł. Logowanie odbywa się jednorazowym linkiem wysyłanym na e-mail.
       </p>
     </main>
   );
