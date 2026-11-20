@@ -61,7 +61,7 @@ export default function JoinPage() {
         <Link
           href="/login/"
           className="btn btn-primary py-3"
-          onClick={() => setNext(`/join/${encodeURIComponent(code)}`)}
+          onClick={() => setNext(`/join/?code=${encodeURIComponent(code)}`)}
         >
           Zaloguj się i dołącz
         </Link>
