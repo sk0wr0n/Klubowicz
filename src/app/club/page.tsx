@@ -1,18 +1,25 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { CalendarDays, ClipboardCheck, List, Plus } from 'lucide-react';
+import { CalendarDays, ClipboardCheck, List, Plus, Trophy } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { useClub } from '@/lib/club';
 import { errMsg, supabase } from '@/lib/supabase';
 import { dayKey, formatDay } from '@/lib/format';
 import { getPref, setPref } from '@/lib/nav';
-import type { Training } from '@/lib/types';
+import type { Tournament, Training } from '@/lib/types';
 import CalendarView from '@/components/CalendarView';
 import TrainingCard from '@/components/TrainingCard';
 import TrainingFormModal from '@/components/TrainingFormModal';
+import TournamentCard from '@/components/TournamentCard';
+import TournamentFormModal from '@/components/TournamentFormModal';
+import { useRouter } from 'next/navigation';
+import { tournamentHref } from '@/lib/nav';
 import { EmptyState, ErrorBox, PageTitle, Spinner } from '@/components/ui';
 import { InstallBanner } from '@/components/InstallHelp';
+
+const TSELECT =
+  'id, club_id, name, location, starts_on, ends_on, event_url, entry_fee, signup_deadline, notes, status, closed_at, created_by, created_at, tournament_signups(user_id)';
 
 const SELECT =
   'id, club_id, title, location, starts_at, ends_at, max_participants, notes, status, settled_at, training_signups(user_id, status)';
@@ -29,6 +36,10 @@ export default function TrainingsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
+  const [tourOpen, setTourOpen] = useState(false);
+  const [tours, setTours] = useState<Tournament[]>([]);
+  const [monthTours, setMonthTours] = useState<Tournament[]>([]);
+  const router = useRouter();
 
   useEffect(() => {
     setView(getPref('view', 'list') === 'calendar' ? 'calendar' : 'list');
@@ -45,6 +56,16 @@ export default function TrainingsPage() {
       .limit(60);
     if (error) throw error;
     setUpcoming((data ?? []) as Training[]);
+    const today = dayKey(new Date());
+    const { data: td, error: te } = await supabase()
+      .from('tournaments')
+      .select(TSELECT)
+      .eq('club_id', clubId)
+      .or(`ends_on.gte.${today},and(ends_on.is.null,starts_on.gte.${today})`)
+      .order('starts_on')
+      .limit(30);
+    if (te) throw te;
+    setTours((td ?? []) as Tournament[]);
     if (isStaff) {
       const { data: past } = await supabase()
         .from('trainings')
@@ -70,6 +91,15 @@ export default function TrainingsPage() {
       .order('starts_at');
     if (error) throw error;
     setMonthItems((data ?? []) as Training[]);
+    const { data: td, error: te } = await supabase()
+      .from('tournaments')
+      .select(TSELECT)
+      .eq('club_id', clubId)
+      .lt('starts_on', dayKey(to))
+      .or(`ends_on.gte.${dayKey(from)},starts_on.gte.${dayKey(from)}`)
+      .order('starts_on');
+    if (te) throw te;
+    setMonthTours((td ?? []) as Tournament[]);
   }, [clubId, month]);
 
   const load = useCallback(async () => {
@@ -95,6 +125,9 @@ export default function TrainingsPage() {
   }
 
   const dayItems = selectedDay ? monthItems.filter((t) => dayKey(new Date(t.starts_at)) === selectedDay) : [];
+  const dayTours = selectedDay
+    ? monthTours.filter((t) => t.starts_on <= selectedDay && (t.ends_on ?? t.starts_on) >= selectedDay)
+    : [];
 
   return (
     <>
@@ -108,11 +141,16 @@ export default function TrainingsPage() {
               : undefined
         }
         action={
-          isStaff ? (
-            <button className="btn btn-primary" onClick={() => setFormOpen(true)}>
-              <Plus className="h-4 w-4" /> Nowy
+          <div className="flex shrink-0 gap-2">
+            <button className="btn btn-secondary btn-sm border-amber-300 text-amber-800" onClick={() => setTourOpen(true)}>
+              <Trophy className="h-4 w-4" /> Turniej
             </button>
-          ) : undefined
+            {isStaff && (
+              <button className="btn btn-primary btn-sm" onClick={() => setFormOpen(true)}>
+                <Plus className="h-4 w-4" /> Trening
+              </button>
+            )}
+          </div>
         }
       />
 
@@ -149,6 +187,18 @@ export default function TrainingsPage() {
               </div>
             </div>
           )}
+          {tours.length > 0 && (
+            <div className="mb-5">
+              <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold text-amber-700">
+                <Trophy className="h-4 w-4" /> Turnieje ({tours.length})
+              </h2>
+              <div className="flex flex-col gap-3">
+                {tours.map((t) => (
+                  <TournamentCard key={t.id} t={t} clubId={clubId} userId={userId} />
+                ))}
+              </div>
+            </div>
+          )}
           {loading ? (
             <div className="flex justify-center py-10">
               <Spinner className="h-6 w-6 text-indigo-600" />
@@ -176,6 +226,7 @@ export default function TrainingsPage() {
               setSelectedDay(null);
             }}
             trainings={monthItems}
+            tournaments={monthTours}
             selectedDay={selectedDay}
             onSelectDay={setSelectedDay}
             userId={userId}
@@ -185,7 +236,14 @@ export default function TrainingsPage() {
               <h2 className="mb-2 text-sm font-semibold capitalize text-slate-600">
                 {formatDay(`${selectedDay}T12:00:00`)}
               </h2>
-              {dayItems.length === 0 ? (
+              {dayTours.length > 0 && (
+                <div className="mb-3 flex flex-col gap-3">
+                  {dayTours.map((t) => (
+                    <TournamentCard key={t.id} t={t} clubId={clubId} userId={userId} />
+                  ))}
+                </div>
+              )}
+              {dayItems.length === 0 && dayTours.length > 0 ? null : dayItems.length === 0 ? (
                 <div className="card text-sm text-slate-500">
                   Brak treningów tego dnia.
                   {isStaff && (
@@ -206,6 +264,12 @@ export default function TrainingsPage() {
         </>
       )}
 
+      <TournamentFormModal
+        open={tourOpen}
+        onClose={() => setTourOpen(false)}
+        onSaved={(id) => router.push(tournamentHref(clubId, id))}
+        defaultDate={view === 'calendar' && selectedDay ? selectedDay : undefined}
+      />
       <TrainingFormModal
         open={formOpen}
         onClose={() => setFormOpen(false)}

@@ -1977,6 +1977,395 @@ grant execute on function public.sa_mark_paid(uuid) to authenticated;
 grant execute on function public.sa_set_status(uuid, text) to authenticated;
 grant execute on function public.sa_void_invoice(uuid) to authenticated;
 
+-- =====================================================================
+-- TURNIEJE: dodaje każdy członek, zapisy, podział wpisowego, opłaty dodatkowe
+-- =====================================================================
+
+create table if not exists public.tournaments (
+  id              uuid primary key default gen_random_uuid(),
+  club_id         uuid not null references public.clubs (id) on delete cascade,
+  name            text not null check (char_length(trim(name)) between 2 and 150),
+  location        text not null check (char_length(trim(location)) between 2 and 200),
+  starts_on       date not null,
+  ends_on         date,
+  event_url       text check (event_url is null or event_url ~* '^https?://'),
+  entry_fee       numeric(10,2) check (entry_fee is null or entry_fee >= 0),
+  signup_deadline date not null,
+  notes           text,
+  status          text not null default 'open' check (status in ('open', 'closed')),
+  closed_at       timestamptz,
+  closed_by       uuid references public.profiles (id) on delete set null,
+  created_by      uuid references public.profiles (id) on delete set null,
+  created_at      timestamptz not null default now(),
+  check (ends_on is null or ends_on >= starts_on)
+);
+create index if not exists tournaments_club_idx on public.tournaments (club_id, starts_on);
+
+create table if not exists public.tournament_signups (
+  tournament_id  uuid not null references public.tournaments (id) on delete cascade,
+  club_id        uuid not null references public.clubs (id) on delete cascade,
+  user_id        uuid not null references public.profiles (id) on delete cascade,
+  added_by_staff boolean not null default false,
+  signed_up_at   timestamptz not null default clock_timestamp(),
+  primary key (tournament_id, user_id)
+);
+create index if not exists tournament_signups_user_idx on public.tournament_signups (user_id);
+
+-- Obciążenia turniejowe w księdze zawodnika
+alter table public.transactions add column if not exists tournament_id uuid references public.tournaments (id) on delete cascade;
+alter table public.transactions drop constraint if exists transactions_type_check;
+alter table public.transactions add constraint transactions_type_check check (type in (
+  'payment', 'monthly_fee', 'session_fee', 'late_cancel_fee', 'adjustment', 'tournament_fee', 'tournament_extra'));
+create unique index if not exists transactions_tournament_fee_uniq
+  on public.transactions (tournament_id, user_id) where type = 'tournament_fee';
+create index if not exists transactions_tournament_idx on public.transactions (tournament_id) where tournament_id is not null;
+
+alter table public.tournaments        enable row level security;
+alter table public.tournament_signups enable row level security;
+
+drop policy if exists tournaments_select on public.tournaments;
+create policy tournaments_select on public.tournaments for select to authenticated
+  using (public.is_club_member(club_id) or public.is_superadmin());
+
+drop policy if exists tournament_signups_select on public.tournament_signups;
+create policy tournament_signups_select on public.tournament_signups for select to authenticated
+  using (public.is_club_member(club_id) or public.is_superadmin());
+
+revoke all on public.tournaments, public.tournament_signups from anon, authenticated;
+grant select on public.tournaments to authenticated;
+grant select on public.tournament_signups to authenticated;
+
+-- Opłacone obciążenia: wpłaty pokrywają obciążenia od najstarszego (FIFO)
+create or replace function public._paid_charges(p_club uuid, p_user uuid)
+returns table (tx_id uuid, paid boolean)
+language sql stable security definer set search_path = public as $$
+  with c as (
+    select coalesce(sum(amount) filter (where amount > 0), 0) as credit
+    from public.transactions where club_id = p_club and user_id = p_user
+  ), d as (
+    select id, sum(-amount) over (order by booked_at, created_at, id) as cum
+    from public.transactions where club_id = p_club and user_id = p_user and amount < 0
+  )
+  select d.id, d.cum <= c.credit from d, c;
+$$;
+
+-- Przeliczenie wpisowego: kwota / liczba zapisanych (tylko gdy zapisy zamknięte)
+create or replace function public._tournament_recalc(p_tournament uuid)
+returns void language plpgsql volatile security definer set search_path = public as $$
+declare
+  t       public.tournaments%rowtype;
+  v_n     integer;
+  v_share numeric(10,2);
+  v_desc  text;
+begin
+  select * into t from public.tournaments where id = p_tournament for update;
+  if not found then return; end if;
+
+  if t.status <> 'closed' or coalesce(t.entry_fee, 0) <= 0 then
+    delete from public.transactions where tournament_id = t.id and type = 'tournament_fee';
+    return;
+  end if;
+
+  select count(*) into v_n from public.tournament_signups where tournament_id = t.id;
+
+  delete from public.transactions x
+  where x.tournament_id = t.id and x.type = 'tournament_fee'
+    and not exists (select 1 from public.tournament_signups s where s.tournament_id = t.id and s.user_id = x.user_id);
+
+  if v_n = 0 then return; end if;
+
+  v_share := round(t.entry_fee / v_n, 2);
+  v_desc := left('Wpisowe: ' || t.name || ' (' || to_char(t.entry_fee, 'FM999990.00') || ' zł / ' || v_n || ' os.)', 300);
+
+  update public.transactions
+  set amount = -v_share, description = v_desc
+  where tournament_id = t.id and type = 'tournament_fee';
+
+  insert into public.transactions (club_id, user_id, amount, type, description, tournament_id, booked_at, created_by)
+  select t.club_id, s.user_id, -v_share, 'tournament_fee', v_desc, t.id,
+         (coalesce(t.closed_at, now()) at time zone 'Europe/Warsaw')::date, t.closed_by
+  from public.tournament_signups s
+  where s.tournament_id = t.id
+  on conflict do nothing;
+end $$;
+
+-- Dodanie / edycja turnieju (każdy aktywny członek). Kwotę wpisowego po zamknięciu zmienia tylko Opiekun.
+create or replace function public.save_tournament(
+  p_club uuid, p_id uuid, p_name text, p_location text, p_starts_on date, p_ends_on date,
+  p_event_url text, p_entry_fee numeric, p_signup_deadline date, p_notes text
+)
+returns uuid language plpgsql volatile security definer set search_path = public as $$
+declare
+  v_uid uuid := public._require_uid();
+  t     public.tournaments%rowtype;
+  v_url text := nullif(trim(coalesce(p_event_url, '')), '');
+  v_id  uuid;
+begin
+  if not public.is_club_member(p_club) then
+    raise exception 'Nie jesteś aktywnym członkiem tego klubu.' using errcode = '42501';
+  end if;
+  perform public._assert_club_not_suspended(p_club);
+  if coalesce(trim(p_name), '') = '' then raise exception 'Podaj nazwę turnieju.'; end if;
+  if coalesce(trim(p_location), '') = '' then raise exception 'Podaj miejsce turnieju.'; end if;
+  if p_starts_on is null then raise exception 'Podaj datę turnieju.'; end if;
+  if p_signup_deadline is null then raise exception 'Podaj termin zamknięcia zapisów.'; end if;
+  if p_ends_on is not null and p_ends_on < p_starts_on then raise exception 'Data końca jest przed datą początku.'; end if;
+  if v_url is not null and v_url !~* '^https?://' then v_url := 'https://' || v_url; end if;
+  if p_entry_fee is not null and p_entry_fee < 0 then raise exception 'Wpisowe nie może być ujemne.'; end if;
+
+  if p_id is null then
+    insert into public.tournaments (club_id, name, location, starts_on, ends_on, event_url, entry_fee,
+                                    signup_deadline, notes, created_by)
+    values (p_club, trim(p_name), trim(p_location), p_starts_on, p_ends_on, v_url, round(p_entry_fee, 2),
+            p_signup_deadline, nullif(trim(coalesce(p_notes, '')), ''), v_uid)
+    returning id into v_id;
+    -- autor od razu zapisany
+    insert into public.tournament_signups (tournament_id, club_id, user_id) values (v_id, p_club, v_uid);
+    return v_id;
+  end if;
+
+  select * into t from public.tournaments where id = p_id and club_id = p_club for update;
+  if not found then raise exception 'Turniej nie istnieje.'; end if;
+  if t.status = 'closed' and round(p_entry_fee, 2) is distinct from t.entry_fee and not public.is_club_staff(p_club) then
+    raise exception 'Po zamknięciu zapisów kwotę wpisowego może zmienić tylko Opiekun.';
+  end if;
+  if t.status = 'closed' and p_entry_fee is null then
+    raise exception 'Zapisy są zamknięte – wpisowe musi być podane.';
+  end if;
+
+  update public.tournaments set
+    name = trim(p_name), location = trim(p_location), starts_on = p_starts_on, ends_on = p_ends_on,
+    event_url = v_url, entry_fee = round(p_entry_fee, 2), signup_deadline = p_signup_deadline,
+    notes = nullif(trim(coalesce(p_notes, '')), '')
+  where id = p_id;
+
+  perform public._tournament_recalc(p_id);
+  return p_id;
+end $$;
+
+-- Usunięcie turnieju: Opiekun/Właściciel albo autor, dopóki nie ma obciążeń
+create or replace function public.delete_tournament(p_tournament uuid)
+returns void language plpgsql volatile security definer set search_path = public as $$
+declare
+  v_uid uuid := public._require_uid();
+  t     public.tournaments%rowtype;
+begin
+  select * into t from public.tournaments where id = p_tournament;
+  if not found then raise exception 'Turniej nie istnieje.'; end if;
+  if not public.is_club_staff(t.club_id) then
+    if t.created_by is distinct from v_uid or not public.is_club_member(t.club_id) then
+      raise exception 'Turniej może usunąć autor albo Opiekun.' using errcode = '42501';
+    end if;
+    if exists (select 1 from public.transactions where tournament_id = t.id) then
+      raise exception 'Turniej ma już naliczone opłaty – usunąć go może tylko Opiekun.';
+    end if;
+  end if;
+  delete from public.tournaments where id = t.id;  -- obciążenia usuwane kaskadowo
+end $$;
+
+create or replace function public.join_tournament(p_tournament uuid)
+returns void language plpgsql volatile security definer set search_path = public as $$
+declare
+  v_uid uuid := public._require_uid();
+  t     public.tournaments%rowtype;
+begin
+  select * into t from public.tournaments where id = p_tournament for update;
+  if not found then raise exception 'Turniej nie istnieje.'; end if;
+  if not public.is_club_member(t.club_id) then
+    raise exception 'Nie jesteś aktywnym członkiem tego klubu.' using errcode = '42501';
+  end if;
+  perform public._assert_club_not_suspended(t.club_id);
+  if t.status = 'closed' then raise exception 'Zapisy są zamknięte – poproś Opiekuna o dopisanie.'; end if;
+  if t.signup_deadline < (now() at time zone 'Europe/Warsaw')::date then
+    raise exception 'Minął termin zapisów – poproś Opiekuna o dopisanie.';
+  end if;
+  insert into public.tournament_signups (tournament_id, club_id, user_id)
+  values (t.id, t.club_id, v_uid) on conflict do nothing;
+end $$;
+
+create or replace function public.leave_tournament(p_tournament uuid)
+returns void language plpgsql volatile security definer set search_path = public as $$
+declare
+  v_uid uuid := public._require_uid();
+  t     public.tournaments%rowtype;
+begin
+  select * into t from public.tournaments where id = p_tournament for update;
+  if not found then raise exception 'Turniej nie istnieje.'; end if;
+  if not public.is_club_member(t.club_id) then
+    raise exception 'Nie jesteś aktywnym członkiem tego klubu.' using errcode = '42501';
+  end if;
+  if t.status = 'closed' then
+    raise exception 'Zapisy są zamknięte – w sprawie wypisania skontaktuj się z Opiekunem.';
+  end if;
+  delete from public.tournament_signups where tournament_id = t.id and user_id = v_uid;
+end $$;
+
+-- Opiekun: dopisanie (także po zamknięciu – wpisowe przeliczy się dla wszystkich)
+create or replace function public.staff_add_tournament_signup(p_tournament uuid, p_user uuid)
+returns void language plpgsql volatile security definer set search_path = public as $$
+declare t public.tournaments%rowtype;
+begin
+  select * into t from public.tournaments where id = p_tournament for update;
+  if not found then raise exception 'Turniej nie istnieje.'; end if;
+  perform public._require_staff(t.club_id);
+  perform public._assert_club_not_suspended(t.club_id);
+  if not exists (select 1 from public.club_members where club_id = t.club_id and user_id = p_user and status = 'active') then
+    raise exception 'Ta osoba nie jest aktywnym członkiem klubu.';
+  end if;
+  insert into public.tournament_signups (tournament_id, club_id, user_id, added_by_staff)
+  values (t.id, t.club_id, p_user, true) on conflict do nothing;
+  perform public._tournament_recalc(t.id);
+end $$;
+
+-- Opiekun: wypisanie (także po zamknięciu) – cofa obciążenia tej osoby i przelicza wpisowe pozostałym
+create or replace function public.staff_remove_tournament_signup(p_tournament uuid, p_user uuid)
+returns void language plpgsql volatile security definer set search_path = public as $$
+declare t public.tournaments%rowtype;
+begin
+  select * into t from public.tournaments where id = p_tournament for update;
+  if not found then raise exception 'Turniej nie istnieje.'; end if;
+  perform public._require_staff(t.club_id);
+  delete from public.tournament_signups where tournament_id = t.id and user_id = p_user;
+  delete from public.transactions where tournament_id = t.id and user_id = p_user;
+  perform public._tournament_recalc(t.id);
+end $$;
+
+-- Opiekun: zamknięcie zapisów = naliczenie wpisowego po równo
+create or replace function public.close_tournament(p_tournament uuid)
+returns jsonb language plpgsql volatile security definer set search_path = public as $$
+declare
+  v_uid uuid := public._require_uid();
+  t     public.tournaments%rowtype;
+  v_n   integer;
+begin
+  select * into t from public.tournaments where id = p_tournament for update;
+  if not found then raise exception 'Turniej nie istnieje.'; end if;
+  perform public._require_staff(t.club_id);
+  perform public._assert_club_not_suspended(t.club_id);
+  if t.status = 'closed' then raise exception 'Zapisy są już zamknięte.'; end if;
+  if t.entry_fee is null then raise exception 'Uzupełnij kwotę wpisowego, aby zamknąć zapisy.'; end if;
+  select count(*) into v_n from public.tournament_signups where tournament_id = t.id;
+  if v_n = 0 then raise exception 'Nikt nie jest zapisany na turniej.'; end if;
+
+  update public.tournaments set status = 'closed', closed_at = now(), closed_by = v_uid where id = t.id;
+  perform public._tournament_recalc(t.id);
+  return jsonb_build_object('participants', v_n, 'share', case when t.entry_fee > 0 then round(t.entry_fee / v_n, 2) else 0 end);
+end $$;
+
+-- Opiekun: ponowne otwarcie zapisów – wpisowe zostaje cofnięte (opłaty dodatkowe zostają)
+create or replace function public.reopen_tournament(p_tournament uuid)
+returns void language plpgsql volatile security definer set search_path = public as $$
+declare t public.tournaments%rowtype;
+begin
+  select * into t from public.tournaments where id = p_tournament for update;
+  if not found then raise exception 'Turniej nie istnieje.'; end if;
+  perform public._require_staff(t.club_id);
+  update public.tournaments set status = 'open', closed_at = null, closed_by = null where id = t.id;
+  perform public._tournament_recalc(t.id);
+end $$;
+
+-- Opiekun: opłata dodatkowa (np. nocleg) dla wybranych uczestników – ręcznie per zawodnik
+create or replace function public.add_tournament_extra(p_tournament uuid, p_users uuid[], p_amount numeric, p_description text)
+returns integer language plpgsql volatile security definer set search_path = public as $$
+declare
+  v_uid uuid := public._require_uid();
+  t     public.tournaments%rowtype;
+  v_n   integer;
+begin
+  select * into t from public.tournaments where id = p_tournament;
+  if not found then raise exception 'Turniej nie istnieje.'; end if;
+  perform public._require_staff(t.club_id);
+  perform public._assert_club_not_suspended(t.club_id);
+  if p_amount is null or p_amount <= 0 then raise exception 'Kwota musi być większa od zera.'; end if;
+  if coalesce(trim(p_description), '') = '' then raise exception 'Podaj, za co jest opłata (np. nocleg).'; end if;
+  if exists (select 1 from unnest(coalesce(p_users, '{}')) u
+             where not exists (select 1 from public.tournament_signups s where s.tournament_id = t.id and s.user_id = u)) then
+    raise exception 'Opłatę dodatkową można dodać tylko uczestnikom turnieju.';
+  end if;
+  insert into public.transactions (club_id, user_id, amount, type, description, tournament_id, booked_at, created_by)
+  select t.club_id, u, -round(p_amount, 2), 'tournament_extra',
+         left(trim(p_description) || ': ' || t.name, 300), t.id, current_date, v_uid
+  from (select distinct unnest(coalesce(p_users, '{}')) as u) x;
+  get diagnostics v_n = row_count;
+  return v_n;
+end $$;
+
+create or replace function public.delete_tournament_extra(p_tx uuid)
+returns void language plpgsql volatile security definer set search_path = public as $$
+declare x public.transactions%rowtype;
+begin
+  select * into x from public.transactions where id = p_tx;
+  if not found or x.type <> 'tournament_extra' then raise exception 'Nie znaleziono opłaty dodatkowej.'; end if;
+  perform public._require_staff(x.club_id);
+  delete from public.transactions where id = p_tx;
+end $$;
+
+-- Uczestnicy z informacją o opłaceniu. Kwoty widzi Opiekun/Właściciel oraz sam zainteresowany;
+-- pozostali widzą tylko „ptaszki” (opłacone / nieopłacone).
+create or replace function public.tournament_participants(p_tournament uuid)
+returns table (
+  user_id uuid, added_by_staff boolean, signed_up_at timestamptz,
+  fee_amount numeric, fee_paid boolean, extras_amount numeric, extras_paid boolean, extras jsonb
+)
+language plpgsql stable security definer set search_path = public as $$
+declare
+  v_uid   uuid := public._require_uid();
+  t       public.tournaments%rowtype;
+  v_staff boolean;
+begin
+  select * into t from public.tournaments where id = p_tournament;
+  if not found or not (public.is_club_member(t.club_id) or public.is_superadmin()) then
+    raise exception 'Nie masz dostępu do tego turnieju.' using errcode = '42501';
+  end if;
+  v_staff := public.is_club_staff(t.club_id) or public.is_superadmin();
+
+  return query
+  with tx as (
+    select x.id, x.user_id, -x.amount as amt, x.type, x.description, x.booked_at,
+           coalesce((select p.paid from public._paid_charges(t.club_id, x.user_id) p where p.tx_id = x.id), false) as paid
+    from public.transactions x
+    where x.tournament_id = t.id
+  )
+  select s.user_id, s.added_by_staff, s.signed_up_at,
+         case when v_staff or s.user_id = v_uid then (select sum(tx.amt) from tx where tx.user_id = s.user_id and tx.type = 'tournament_fee') end,
+         (select bool_and(tx.paid) from tx where tx.user_id = s.user_id and tx.type = 'tournament_fee'),
+         case when v_staff or s.user_id = v_uid then (select sum(tx.amt) from tx where tx.user_id = s.user_id and tx.type = 'tournament_extra') end,
+         (select bool_and(tx.paid) from tx where tx.user_id = s.user_id and tx.type = 'tournament_extra'),
+         case when v_staff or s.user_id = v_uid then
+           (select jsonb_agg(jsonb_build_object('id', tx.id, 'amount', tx.amt, 'description', tx.description,
+                                                'paid', tx.paid, 'booked_at', tx.booked_at) order by tx.booked_at, tx.id)
+            from tx where tx.user_id = s.user_id and tx.type = 'tournament_extra')
+         end
+  from public.tournament_signups s
+  where s.tournament_id = t.id
+  order by s.signed_up_at;
+end $$;
+
+revoke all on function public._paid_charges(uuid, uuid) from public, anon, authenticated;
+revoke all on function public._tournament_recalc(uuid) from public, anon, authenticated;
+revoke all on function public.save_tournament(uuid, uuid, text, text, date, date, text, numeric, date, text) from public, anon;
+revoke all on function public.delete_tournament(uuid) from public, anon;
+revoke all on function public.join_tournament(uuid) from public, anon;
+revoke all on function public.leave_tournament(uuid) from public, anon;
+revoke all on function public.staff_add_tournament_signup(uuid, uuid) from public, anon;
+revoke all on function public.staff_remove_tournament_signup(uuid, uuid) from public, anon;
+revoke all on function public.close_tournament(uuid) from public, anon;
+revoke all on function public.reopen_tournament(uuid) from public, anon;
+revoke all on function public.add_tournament_extra(uuid, uuid[], numeric, text) from public, anon;
+revoke all on function public.delete_tournament_extra(uuid) from public, anon;
+revoke all on function public.tournament_participants(uuid) from public, anon;
+grant execute on function public.save_tournament(uuid, uuid, text, text, date, date, text, numeric, date, text) to authenticated;
+grant execute on function public.delete_tournament(uuid) to authenticated;
+grant execute on function public.join_tournament(uuid) to authenticated;
+grant execute on function public.leave_tournament(uuid) to authenticated;
+grant execute on function public.staff_add_tournament_signup(uuid, uuid) to authenticated;
+grant execute on function public.staff_remove_tournament_signup(uuid, uuid) to authenticated;
+grant execute on function public.close_tournament(uuid) to authenticated;
+grant execute on function public.reopen_tournament(uuid) to authenticated;
+grant execute on function public.add_tournament_extra(uuid, uuid[], numeric, text) to authenticated;
+grant execute on function public.delete_tournament_extra(uuid) to authenticated;
+grant execute on function public.tournament_participants(uuid) to authenticated;
+
 -- Harmonogram: 1. dnia miesiąca o 05:00 UTC (06:00 zimą / 07:00 latem w Polsce)
 do $$
 begin

@@ -58,6 +58,10 @@ export function trainingHref(clubId: string, trainingId: string): string {
   return `/club/training/?id=${encodeURIComponent(clubId)}&t=${encodeURIComponent(trainingId)}`;
 }
 
+export function tournamentHref(clubId: string, tournamentId: string): string {
+  return `/club/tournament/?id=${encodeURIComponent(clubId)}&t=${encodeURIComponent(tournamentId)}`;
+}
+
 export function inviteLink(code: string): string {
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
   return `${origin}/join/${encodeURIComponent(code)}`;

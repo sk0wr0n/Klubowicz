@@ -77,3 +77,25 @@ export function initials(name: string | null | undefined): string {
 export function hoursUntil(iso: string): number {
   return (new Date(iso).getTime() - Date.now()) / 3_600_000;
 }
+
+/** Data RRRR-MM-DD (bez strefy) → obiekt Date w południe czasu lokalnego */
+export function dateOnly(d: string): Date {
+  return new Date(`${d}T12:00:00`);
+}
+
+/** „sob., 12 gru” albo zakres „12–13 gru” */
+export function formatDateRange(from: string, to?: string | null): string {
+  const a = dateOnly(from);
+  const opts: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short' };
+  if (!to || to === from) return a.toLocaleDateString('pl-PL', { weekday: 'short', ...opts });
+  const b = dateOnly(to);
+  if (a.getMonth() === b.getMonth()) return `${a.getDate()}–${b.toLocaleDateString('pl-PL', opts)}`;
+  return `${a.toLocaleDateString('pl-PL', opts)} – ${b.toLocaleDateString('pl-PL', opts)}`;
+}
+
+/** Ile dni do daty RRRR-MM-DD (0 = dziś, ujemne = po terminie) */
+export function daysUntil(d: string): number {
+  const today = new Date();
+  today.setHours(12, 0, 0, 0);
+  return Math.round((dateOnly(d).getTime() - today.getTime()) / 86_400_000);
+}

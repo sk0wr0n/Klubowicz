@@ -4,7 +4,14 @@ export type BillingMode = 'monthly' | 'per_session';
 export type SubStatus = 'active' | 'past_due' | 'suspended';
 export type TrainingStatus = 'scheduled' | 'cancelled' | 'settled';
 export type SignupStatus = 'main' | 'reserve' | 'late_cancel';
-export type TxType = 'payment' | 'monthly_fee' | 'session_fee' | 'late_cancel_fee' | 'adjustment';
+export type TxType =
+  | 'payment'
+  | 'monthly_fee'
+  | 'session_fee'
+  | 'late_cancel_fee'
+  | 'adjustment'
+  | 'tournament_fee'
+  | 'tournament_extra';
 export type PlanCode = 'FREE' | 'CLUB_50' | 'CLUB_100' | 'CUSTOM';
 
 export interface Profile {
@@ -200,6 +207,8 @@ export const TX_LABEL: Record<TxType, string> = {
   session_fee: 'Opłata za trening',
   late_cancel_fee: 'Późne wypisanie',
   adjustment: 'Korekta',
+  tournament_fee: 'Wpisowe – turniej',
+  tournament_extra: 'Turniej – opłata dodatkowa',
 };
 
 export const PLAN_LABEL: Record<PlanCode, string> = {
@@ -214,3 +223,40 @@ export const SUB_LABEL: Record<SubStatus, string> = {
   past_due: 'Zaległość',
   suspended: 'Zawieszony',
 };
+
+export interface Tournament {
+  id: string;
+  club_id: string;
+  name: string;
+  location: string;
+  starts_on: string; // RRRR-MM-DD
+  ends_on: string | null;
+  event_url: string | null;
+  entry_fee: number | null;
+  signup_deadline: string; // RRRR-MM-DD
+  notes: string | null;
+  status: 'open' | 'closed';
+  closed_at: string | null;
+  created_by: string | null;
+  created_at: string;
+  tournament_signups?: { user_id: string }[];
+}
+
+export interface TournamentExtra {
+  id: string;
+  amount: number;
+  description: string;
+  paid: boolean;
+  booked_at: string;
+}
+
+export interface TournamentParticipant {
+  user_id: string;
+  added_by_staff: boolean;
+  signed_up_at: string;
+  fee_amount: number | null;
+  fee_paid: boolean | null;
+  extras_amount: number | null;
+  extras_paid: boolean | null;
+  extras: TournamentExtra[] | null;
+}
