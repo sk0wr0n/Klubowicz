@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { CalendarDays, ClipboardCheck, List, Plus, Trophy } from 'lucide-react';
+import { CalendarDays, ClipboardCheck, List, Plus, Trophy, Volleyball } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { useClub } from '@/lib/club';
 import { errMsg, supabase } from '@/lib/supabase';
@@ -146,7 +146,7 @@ export default function TrainingsPage() {
             </button>
             <button className="btn btn-primary btn-sm px-2.5" onClick={() => setFormOpen(true)} aria-label="Dodaj trening">
               <Plus className="h-4 w-4" />
-              <CalendarDays className="h-4 w-4" /> Trening
+              <Volleyball className="h-4 w-4" /> Trening
             </button>
           </div>
         }

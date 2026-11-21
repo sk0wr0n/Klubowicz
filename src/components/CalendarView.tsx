@@ -1,6 +1,6 @@
 'use client';
 
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Trophy, Volleyball } from 'lucide-react';
 import { dayKey, monthLabel } from '@/lib/format';
 import type { Tournament, Training } from '@/lib/types';
 
@@ -81,54 +81,64 @@ export default function CalendarView({
           const k = dayKey(d);
           const list = byDay[k] ?? [];
           const tour = tourDays[k];
-          const has = list.some((t) => t.status !== 'cancelled') || Boolean(tour);
-          const mine = list.some((t) => t.training_signups?.some((s) => s.user_id === userId && s.status !== 'late_cancel'));
+          const active = list.filter((t) => t.status !== 'cancelled');
+          const cancelledOnly = list.length > 0 && active.length === 0;
+          const mineTraining = active.some((t) =>
+            t.training_signups?.some((s) => s.user_id === userId && s.status !== 'late_cancel')
+          );
+          const mine = mineTraining || Boolean(tour?.mine);
           const selected = selectedDay === k;
+          const isToday = k === today;
+          const tone = selected
+            ? 'bg-indigo-600 text-white shadow-md'
+            : tour
+              ? 'bg-gradient-to-b from-amber-100 to-amber-50 text-amber-900 hover:from-amber-200'
+              : active.length
+                ? 'bg-indigo-50 text-indigo-800 hover:bg-indigo-100'
+                : 'text-slate-600 hover:bg-slate-50';
           return (
             <button
               key={i}
               onClick={() => onSelectDay(k)}
-              className={`relative flex aspect-square flex-col items-center justify-center rounded-xl text-sm transition ${
-                selected
-                  ? 'bg-indigo-600 font-semibold text-white'
-                  : tour
-                    ? 'bg-amber-50 font-semibold text-amber-800 hover:bg-amber-100'
-                    : has
-                    ? 'bg-indigo-50 font-semibold text-indigo-700 hover:bg-indigo-100'
-                    : 'text-slate-600 hover:bg-slate-50'
-              } ${k === today && !selected ? 'ring-2 ring-indigo-300' : ''}`}
+              className={`relative flex aspect-square flex-col items-center justify-start gap-0.5 rounded-xl pt-1.5 text-sm transition ${tone} ${
+                isToday && !selected ? 'ring-2 ring-indigo-400' : ''
+              } ${mine && !selected ? 'ring-2 ring-emerald-400' : ''}`}
             >
-              {d.getDate()}
-              {(list.length > 0 || tour) && (
-                <span className="absolute bottom-1 flex gap-0.5">
-                  {tour && (
-                    <span
-                      className={`h-1.5 w-1.5 rotate-45 ${selected ? 'bg-white' : tour.mine ? 'bg-emerald-500' : 'bg-amber-500'}`}
-                    />
+              <span className={`leading-none ${active.length || tour ? 'font-bold' : ''}`}>{d.getDate()}</span>
+              {(active.length > 0 || tour || cancelledOnly) && (
+                <span className="flex items-center gap-0.5">
+                  {active.length > 0 && (
+                    <Volleyball className={`h-4 w-4 ${selected ? 'text-white' : 'text-indigo-600'}`} strokeWidth={2.2} />
                   )}
-                  {list.slice(0, 3).map((t) => (
-                    <span
-                      key={t.id}
-                      className={`h-1.5 w-1.5 rounded-full ${
-                        selected ? 'bg-white' : t.status === 'cancelled' ? 'bg-slate-300' : mine ? 'bg-emerald-500' : 'bg-indigo-500'
-                      }`}
-                    />
-                  ))}
+                  {tour && <Trophy className={`h-4 w-4 ${selected ? 'text-white' : 'text-amber-600'}`} strokeWidth={2.2} />}
+                  {cancelledOnly && !tour && <Volleyball className="h-4 w-4 text-slate-300" />}
+                </span>
+              )}
+              {mine && (
+                <span
+                  className={`absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full ${
+                    selected ? 'bg-white text-emerald-600' : 'bg-emerald-500 text-white'
+                  } shadow`}
+                >
+                  <Check className="h-3 w-3" strokeWidth={3} />
                 </span>
               )}
             </button>
           );
         })}
       </div>
-      <p className="mt-2 flex gap-3 text-[11px] text-slate-500">
+      <p className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-500">
         <span className="inline-flex items-center gap-1">
-          <span className="h-2 w-2 rounded-full bg-indigo-500" /> trening
+          <Volleyball className="h-3.5 w-3.5 text-indigo-600" /> trening
         </span>
         <span className="inline-flex items-center gap-1">
-          <span className="h-2 w-2 rotate-45 bg-amber-500" /> turniej
+          <Trophy className="h-3.5 w-3.5 text-amber-600" /> turniej
         </span>
         <span className="inline-flex items-center gap-1">
-          <span className="h-2 w-2 rounded-full bg-emerald-500" /> jesteś zapisany
+          <span className="flex h-3.5 w-3.5 items-center justify-center rounded-full bg-emerald-500 text-white">
+            <Check className="h-2.5 w-2.5" strokeWidth={3} />
+          </span>{' '}
+          jesteś zapisany
         </span>
       </p>
     </div>
