@@ -36,14 +36,17 @@ export default function CalendarView({
     const k = dayKey(new Date(t.starts_at));
     (byDay[k] ??= []).push(t);
   }
-  const tourDays: Record<string, { mine: boolean }> = {};
+  const tourDays: Record<string, { mine: boolean; count: number }> = {};
   for (const t of tournaments) {
     const mine = Boolean(t.tournament_signups?.some((s) => s.user_id === userId));
     const d = new Date(`${t.starts_on}T12:00:00`);
     const end = new Date(`${t.ends_on ?? t.starts_on}T12:00:00`);
     for (let i = 0; d <= end && i < 14; i++) {
       const k = dayKey(d);
-      tourDays[k] = { mine: (tourDays[k]?.mine ?? false) || mine };
+      tourDays[k] = {
+        mine: (tourDays[k]?.mine ?? false) || mine,
+        count: (tourDays[k]?.count ?? 0) + (t.tournament_signups?.length ?? 0),
+      };
       d.setDate(d.getDate() + 1);
     }
   }
@@ -87,6 +90,10 @@ export default function CalendarView({
             t.training_signups?.some((s) => s.user_id === userId && s.status !== 'late_cancel')
           );
           const mine = mineTraining || Boolean(tour?.mine);
+          const trainingCount = active.reduce(
+            (n, t) => n + (t.training_signups?.filter((x) => x.status === 'main').length ?? 0),
+            0
+          );
           const selected = selectedDay === k;
           const isToday = k === today;
           const tone = selected
@@ -106,11 +113,25 @@ export default function CalendarView({
             >
               <span className={`leading-none ${active.length || tour ? 'font-bold' : ''}`}>{d.getDate()}</span>
               {(active.length > 0 || tour || cancelledOnly) && (
-                <span className="flex items-center gap-0.5">
+                <span className={`flex items-center ${active.length > 0 && tour ? 'flex-col gap-0' : 'gap-0.5'}`}>
                   {active.length > 0 && (
-                    <Volleyball className={`h-4 w-4 ${selected ? 'text-white' : 'text-indigo-600'}`} strokeWidth={2.2} />
+                    <span className="flex items-center gap-px leading-none">
+                      <Volleyball
+                        className={`${tour ? 'h-3 w-3' : 'h-3.5 w-3.5'} ${selected ? 'text-white' : 'text-indigo-600'}`}
+                        strokeWidth={2.2}
+                      />
+                      <span className={`text-[10px] font-semibold ${selected ? 'text-white' : 'text-indigo-700'}`}>{trainingCount}</span>
+                    </span>
                   )}
-                  {tour && <Trophy className={`h-4 w-4 ${selected ? 'text-white' : 'text-amber-600'}`} strokeWidth={2.2} />}
+                  {tour && (
+                    <span className="flex items-center gap-px leading-none">
+                      <Trophy
+                        className={`${active.length > 0 ? 'h-3 w-3' : 'h-3.5 w-3.5'} ${selected ? 'text-white' : 'text-amber-600'}`}
+                        strokeWidth={2.2}
+                      />
+                      <span className={`text-[10px] font-semibold ${selected ? 'text-white' : 'text-amber-800'}`}>{tour.count}</span>
+                    </span>
+                  )}
                   {cancelledOnly && !tour && <Volleyball className="h-4 w-4 text-slate-300" />}
                 </span>
               )}
@@ -130,6 +151,9 @@ export default function CalendarView({
       <p className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-500">
         <span className="inline-flex items-center gap-1">
           <Volleyball className="h-3.5 w-3.5 text-indigo-600" /> trening
+        </span>
+        <span className="inline-flex items-center gap-1">
+          <span className="font-semibold text-slate-700">liczba</span> = ile osób zapisanych
         </span>
         <span className="inline-flex items-center gap-1">
           <Trophy className="h-3.5 w-3.5 text-amber-600" /> turniej
