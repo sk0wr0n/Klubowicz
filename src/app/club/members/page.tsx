@@ -22,6 +22,7 @@ export default function MembersPage() {
   const [error, setError] = useState<string | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
   const [aliasDraft, setAliasDraft] = useState('');
+  const [nameDraft, setNameDraft] = useState('');
   const [busy, setBusy] = useState(false);
   const [confirm, setConfirm] = useState<{ kind: 'reject' | 'remove'; m: AdminMember } | null>(null);
 
@@ -61,6 +62,7 @@ export default function MembersPage() {
     else {
       setOpenId(m.member_id);
       setAliasDraft((m.aliases ?? []).join(', '));
+      setNameDraft(m.full_name ?? '');
     }
   }
 
@@ -140,6 +142,31 @@ export default function MembersPage() {
               {expanded && (
                 <div className="flex flex-col gap-4 border-t border-slate-100 p-4">
                   <p className="text-xs text-slate-500">{m.email}</p>
+
+                  <div>
+                    <label className="label">Imię i nazwisko</label>
+                    <div className="flex gap-2">
+                      <input
+                        className="input"
+                        value={nameDraft}
+                        maxLength={80}
+                        onChange={(e) => setNameDraft(e.target.value)}
+                        placeholder="Jan Kowalski"
+                      />
+                      <button
+                        className="btn btn-secondary shrink-0"
+                        disabled={busy || nameDraft.trim().replace(/\s+/g, ' ') === (m.full_name ?? '')}
+                        onClick={() =>
+                          void call('set_member_name', { p_member_id: m.member_id, p_full_name: nameDraft }, 'Zmieniono imię i nazwisko.')
+                        }
+                      >
+                        Zapisz
+                      </button>
+                    </div>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Popraw, jeśli zawodnik się pomylił – nazwisko pomaga też rozpoznawać przelewy.
+                    </p>
+                  </div>
 
                   <div>
                     <label className="label">Pozycja na boisku</label>

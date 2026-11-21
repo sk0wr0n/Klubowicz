@@ -2614,6 +2614,28 @@ revoke all on function public.tournament_participants(uuid) from public, anon;
 grant execute on function public.delete_tournament_extra(uuid) to authenticated;
 grant execute on function public.tournament_participants(uuid) to authenticated;
 
+-- Właściciel (lub Superadmin) poprawia imię i nazwisko członka klubu (np. literówka)
+create or replace function public.set_member_name(p_member_id uuid, p_full_name text)
+returns void language plpgsql volatile security definer set search_path = public as $$
+declare
+  m      public.club_members%rowtype;
+  v_name text := regexp_replace(trim(coalesce(p_full_name, '')), '\s+', ' ', 'g');
+begin
+  select * into m from public.club_members where id = p_member_id;
+  if not found then raise exception 'Nie znaleziono członka.'; end if;
+  if not public.is_superadmin() then
+    perform public._require_owner(m.club_id);
+  end if;
+  if char_length(v_name) < 3 or position(' ' in v_name) = 0 then
+    raise exception 'Podaj imię i nazwisko (dwa wyrazy).';
+  end if;
+  if char_length(v_name) > 80 then raise exception 'Imię i nazwisko jest za długie.'; end if;
+  update public.profiles set full_name = v_name where id = m.user_id;
+end $$;
+
+revoke all on function public.set_member_name(uuid, text) from public, anon;
+grant execute on function public.set_member_name(uuid, text) to authenticated;
+
 -- Harmonogram: 1. dnia miesiąca o 05:00 UTC (06:00 zimą / 07:00 latem w Polsce)
 do $$
 begin
