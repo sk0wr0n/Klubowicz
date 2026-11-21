@@ -4,7 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useState, type React
 import { useRouter } from 'next/navigation';
 import type { Session } from '@supabase/supabase-js';
 import { isConfigured, supabase } from './supabase';
-import { setNext } from './nav';
+import { markSigningOut, setNext } from './nav';
 import type { Membership, Profile } from './types';
 
 interface AuthState {
@@ -125,6 +125,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [userId, refreshProfile, refreshMemberships]);
 
   const signOut = useCallback(async () => {
+    markSigningOut();
     await supabase().auth.signOut();
     setSession(null);
     if (typeof window !== 'undefined') window.location.href = '/login/';

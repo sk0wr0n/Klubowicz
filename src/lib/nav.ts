@@ -10,7 +10,15 @@ function safeStorage(): Storage | null {
   }
 }
 
+let signingOut = false;
+/** Podczas wylogowania nie zapamiętujemy bieżącej strony – kolejna osoba nie trafi na cudzy klub. */
+export function markSigningOut(): void {
+  signingOut = true;
+  safeStorage()?.removeItem(NEXT_KEY);
+}
+
 export function setNext(path: string): void {
+  if (signingOut) return;
   if (!path.startsWith('/') || path.startsWith('//')) return;
   safeStorage()?.setItem(NEXT_KEY, path);
 }

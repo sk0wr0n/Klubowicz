@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { usePathname, useSearchParams } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { CalendarDays, Settings, Trophy, Users, Wallet } from 'lucide-react';
 import { useRequireAuth } from '@/lib/auth';
 import { ClubContext, type ClubState } from '@/lib/club';
@@ -18,6 +18,7 @@ export default function ClubShell({ children }: { children: ReactNode }) {
   const { ok } = useRequireAuth();
   const clubId = useSearchParams().get('id') ?? '';
   const pathname = usePathname();
+  const router = useRouter();
   const [ctx, setCtx] = useState<ClubContextData | null>(null);
   const [members, setMembers] = useState<ClubMemberRow[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -26,12 +27,19 @@ export default function ClubShell({ children }: { children: ReactNode }) {
     if (!clubId) return;
     const { data, error } = await supabase().rpc('club_context', { p_club: clubId });
     if (error) {
+      // brak dostępu (np. zgłoszenie czeka na akceptację albo stary link do cudzego klubu) –
+      // wracamy na start, który pokaże właściwy ekran (oczekiwanie, wybór klubu, uzupełnienie profilu)
+      if ((error as { code?: string }).code === '42501') {
+        router.replace('/');
+        return;
+      }
       setError(errMsg(error));
       return;
     }
     setError(null);
+    setLastClub(clubId);
     setCtx(data as ClubContextData);
-  }, [clubId]);
+  }, [clubId, router]);
 
   const reloadMembers = useCallback(async () => {
     if (!clubId) return;
@@ -52,7 +60,6 @@ export default function ClubShell({ children }: { children: ReactNode }) {
       setError('Nie wybrano klubu.');
       return;
     }
-    setLastClub(clubId);
     setCtx(null);
     void reload();
     void reloadMembers();
