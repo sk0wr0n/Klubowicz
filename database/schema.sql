@@ -2366,6 +2366,42 @@ grant execute on function public.add_tournament_extra(uuid, uuid[], numeric, tex
 grant execute on function public.delete_tournament_extra(uuid) to authenticated;
 grant execute on function public.tournament_participants(uuid) to authenticated;
 
+-- Dostępność uczestnika turnieju: które dni (null = wszystkie) + uwaga (np. „dojadę w piątek wieczorem”)
+alter table public.tournament_signups add column if not exists days date[];
+alter table public.tournament_signups add column if not exists note text check (note is null or char_length(note) <= 200);
+
+create or replace function public.set_tournament_availability(p_tournament uuid, p_days date[], p_note text, p_user uuid default null)
+returns void language plpgsql volatile security definer set search_path = public as $$
+declare
+  v_uid  uuid := public._require_uid();
+  v_user uuid := coalesce(p_user, v_uid);
+  t      public.tournaments%rowtype;
+  v_days date[];
+  v_all  date[];
+begin
+  select * into t from public.tournaments where id = p_tournament;
+  if not found then raise exception 'Turniej nie istnieje.'; end if;
+  if v_user <> v_uid then
+    perform public._require_staff(t.club_id);
+  elsif not public.is_club_member(t.club_id) then
+    raise exception 'Nie jesteś aktywnym członkiem tego klubu.' using errcode = '42501';
+  end if;
+
+  select array_agg(d::date order by d) into v_all
+  from generate_series(t.starts_on, coalesce(t.ends_on, t.starts_on), interval '1 day') d;
+  select array_agg(distinct d order by d) into v_days from unnest(coalesce(p_days, v_all)) d where d = any (v_all);
+  if v_days is null then raise exception 'Zaznacz przynajmniej jeden dzień.'; end if;
+
+  update public.tournament_signups
+  set days = case when v_days = v_all then null else v_days end,
+      note = nullif(left(trim(coalesce(p_note, '')), 200), '')
+  where tournament_id = t.id and user_id = v_user;
+  if not found then raise exception 'Ta osoba nie jest zapisana na turniej.'; end if;
+end $$;
+
+revoke all on function public.set_tournament_availability(uuid, date[], text, uuid) from public, anon;
+grant execute on function public.set_tournament_availability(uuid, date[], text, uuid) to authenticated;
+
 -- Harmonogram: 1. dnia miesiąca o 05:00 UTC (06:00 zimą / 07:00 latem w Polsce)
 do $$
 begin

@@ -33,6 +33,26 @@ import { Avatar, ConfirmModal, EmptyState, Modal, Spinner } from '@/components/u
 
 type Confirm = 'close' | 'reopen' | 'delete' | 'leave' | null;
 
+interface Avail {
+  days: string[] | null;
+  note: string | null;
+}
+
+function tournamentDays(from: string, to: string | null): string[] {
+  const out: string[] = [];
+  const d = new Date(`${from}T12:00:00`);
+  const end = new Date(`${to ?? from}T12:00:00`);
+  while (d <= end && out.length < 14) {
+    out.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`);
+    d.setDate(d.getDate() + 1);
+  }
+  return out;
+}
+
+function dayShort(d: string): string {
+  return new Date(`${d}T12:00:00`).toLocaleDateString('pl-PL', { weekday: 'short', day: 'numeric', month: 'short' });
+}
+
 function PaidTick({ label, paid }: { label: string; paid: boolean | null }) {
   if (paid === null) return null;
   return (
@@ -71,14 +91,23 @@ export default function TournamentPage() {
   const [extraAmount, setExtraAmount] = useState('');
   const [extraFor, setExtraFor] = useState<Set<string>>(new Set());
   const [delExtra, setDelExtra] = useState<{ id: string; label: string } | null>(null);
+  const [avail, setAvail] = useState<Record<string, Avail>>({});
+  const [myDays, setMyDays] = useState<Set<string>>(new Set());
+  const [myNote, setMyNote] = useState('');
 
   const load = useCallback(async () => {
     if (!tId) return;
     const sb = supabase();
-    const [a, b] = await Promise.all([
+    const [a, b, c] = await Promise.all([
       sb.from('tournaments').select('*').eq('id', tId).eq('club_id', clubId).maybeSingle(),
       sb.rpc('tournament_participants', { p_tournament: tId }),
+      sb.from('tournament_signups').select('user_id, days, note').eq('tournament_id', tId),
     ]);
+    const av: Record<string, Avail> = {};
+    for (const r of (c.data ?? []) as { user_id: string; days: string[] | null; note: string | null }[]) {
+      av[r.user_id] = { days: r.days, note: r.note };
+    }
+    setAvail(av);
     if (a.error) toast(errMsg(a.error), 'error');
     setT((a.data as Tournament | null) ?? null);
     setPeople(((b.data ?? []) as TournamentParticipant[]).map((p) => ({ ...p, extras: p.extras ?? null })));
@@ -90,6 +119,23 @@ export default function TournamentPage() {
   }, [load]);
 
   const me = people.find((p) => p.user_id === userId);
+  const days = useMemo(() => (t ? tournamentDays(t.starts_on, t.ends_on) : []), [t]);
+  const multiDay = days.length > 1;
+  const mine = userId ? avail[userId] : undefined;
+  useEffect(() => {
+    setMyDays(new Set(mine?.days ?? days));
+    setMyNote(mine?.note ?? '');
+  }, [mine?.days, mine?.note, days]);
+  const availChanged =
+    myNote.trim() !== (mine?.note ?? '') ||
+    [...myDays].sort().join(',') !== (mine?.days ?? days).slice().sort().join(',');
+  const perDay = days.map((d) => ({
+    d,
+    n: people.filter((p) => {
+      const ds = avail[p.user_id]?.days;
+      return !ds || ds.includes(d);
+    }).length,
+  }));
   const count = people.length;
   const isAuthor = t?.created_by === userId;
   const closed = t?.status === 'closed';
@@ -189,7 +235,7 @@ export default function TournamentPage() {
   return (
     <>
       <Link href={clubHref(clubId)} className="mb-3 inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800">
-        <ArrowLeft className="h-4 w-4" /> Treningi i turnieje
+        <ArrowLeft className="h-4 w-4" /> Zapisy
       </Link>
 
       <div className="card mb-4 border-amber-200">
@@ -235,6 +281,63 @@ export default function TournamentPage() {
           <div className="mt-2 flex flex-wrap gap-1.5">
             <PaidAmount label="Twoje wpisowe" amount={me.fee_amount} paid={me.fee_paid} />
             <PaidAmount label="Opłaty dodatkowe" amount={me.extras_amount} paid={me.extras_paid} />
+          </div>
+        )}
+
+        {me && (
+          <div className="mt-3 rounded-xl border border-slate-200 p-3">
+            <p className="text-sm font-semibold">Moja obecność</p>
+            {multiDay && (
+              <>
+                <p className="mb-2 text-xs text-slate-500">Odznacz dni, w które Cię nie będzie.</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {days.map((d) => {
+                    const on = myDays.has(d);
+                    return (
+                      <button
+                        key={d}
+                        type="button"
+                        onClick={() =>
+                          setMyDays((s) => {
+                            const n = new Set(s);
+                            if (on) n.delete(d);
+                            else n.add(d);
+                            return n;
+                          })
+                        }
+                        className={`chip px-3 py-1.5 text-xs ${on ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-400 line-through'}`}
+                      >
+                        {on && <Check className="h-3 w-3" />} {dayShort(d)}
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+            <input
+              className="input mt-2"
+              maxLength={200}
+              value={myNote}
+              onChange={(e) => setMyNote(e.target.value)}
+              placeholder={multiDay ? 'np. dojadę w piątek wieczorem / wyjeżdżam po 1. dniu' : 'np. dojadę na 2. mecz, będę o 10:00'}
+            />
+            {availChanged && (
+              <button
+                className="btn btn-primary btn-sm mt-2 w-full"
+                disabled={busy || (multiDay && myDays.size === 0)}
+                onClick={() =>
+                  void run(() =>
+                    rpc(
+                      'set_tournament_availability',
+                      { p_tournament: tId, p_days: multiDay ? [...myDays].sort() : null, p_note: myNote },
+                      'Zapisano Twoją obecność.'
+                    )
+                  )
+                }
+              >
+                Zapisz
+              </button>
+            )}
           </div>
         )}
 
@@ -303,6 +406,15 @@ export default function TournamentPage() {
             <PositionSummary positions={positions} />
           </div>
         )}
+        {count > 0 && multiDay && (
+          <div className="mb-3 flex flex-wrap gap-1.5">
+            {perDay.map(({ d, n }) => (
+              <span key={d} className="chip bg-amber-50 text-amber-800">
+                📅 {dayShort(d)}: {n} os.
+              </span>
+            ))}
+          </div>
+        )}
         {count === 0 ? (
           <p className="py-4 text-center text-sm text-slate-400">Nikt jeszcze się nie zapisał.</p>
         ) : (
@@ -320,6 +432,17 @@ export default function TournamentPage() {
                         {nameOf(p.user_id)}
                         {p.user_id === userId && ' (Ty)'}
                       </p>
+                      {(avail[p.user_id]?.days || avail[p.user_id]?.note) && (
+                        <p className="text-[11px] text-slate-500">
+                          {avail[p.user_id]?.days && (
+                            <span className="font-medium text-amber-700">
+                              tylko {avail[p.user_id]!.days!.map(dayShort).join(', ')}
+                            </span>
+                          )}
+                          {avail[p.user_id]?.days && avail[p.user_id]?.note && ' · '}
+                          {avail[p.user_id]?.note && <span className="italic">„{avail[p.user_id]!.note}”</span>}
+                        </p>
+                      )}
                       <div className="mt-1 flex flex-wrap gap-1">
                         {showAmounts ? (
                           <>
