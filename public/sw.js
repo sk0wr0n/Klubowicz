@@ -4,7 +4,7 @@
  * - Strony HTML – network-first z awaryjną kopią offline.
  * - Zapytania do Supabase NIE są cache'owane (zawsze świeże dane i bezpieczeństwo).
  */
-const VERSION = 'klubowicz-v1';
+const VERSION = 'klubowicz-v2';
 const STATIC_CACHE = VERSION + '-static';
 const PAGE_CACHE = VERSION + '-pages';
 const OFFLINE_URLS = ['/', '/manifest.json', '/icons/icon-192.png'];
