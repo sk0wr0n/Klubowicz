@@ -3394,6 +3394,22 @@ begin
   perform cron.schedule('klubowicz-backup', '0 22 * * 1,4', 'select public._queue_backup()');
 end $$;
 
+-- Kopia o 22:00 czasu polskiego przez cały rok: harmonogram o 20:00 i 21:00 UTC, kopia tylko gdy w Polsce jest 22:00
+create or replace function public._scheduled_backup()
+returns void language plpgsql volatile security definer set search_path = public as $$
+begin
+  if extract(hour from now() at time zone 'Europe/Warsaw') = 22 then
+    perform public._queue_backup();
+  end if;
+end $$;
+revoke all on function public._scheduled_backup() from public, anon, authenticated;
+
+do $$
+begin
+  perform cron.unschedule(jobid) from cron.job where jobname = 'klubowicz-backup';
+  perform cron.schedule('klubowicz-backup', '0 20,21 * * 1,4', 'select public._scheduled_backup()');
+end $$;
+
 -- Harmonogram: 1. dnia miesiąca o 05:00 UTC (06:00 zimą / 07:00 latem w Polsce)
 do $$
 begin

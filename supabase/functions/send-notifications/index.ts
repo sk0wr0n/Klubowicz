@@ -123,7 +123,7 @@ function renderBackup(r: Row): { subject: string; html: string; filename: string
       `<p style="margin:0 0 10px">W załączniku jest pełna kopia danych aplikacji z ${esc(date)} (${Math.round(json.length / 1024)} KB).
        Zachowaj tego maila – w razie awarii dane można z niego odtworzyć.</p>
        <table style="width:100%;border-collapse:collapse">${rows}</table>
-       <p style="margin:12px 0 0;font-size:12px;color:#94a3b8">Kopia wysyłana automatycznie w poniedziałki i czwartki wieczorem. Plik zawiera dane osobowe (imiona, e-maile, salda) – nie przekazuj go dalej.</p>`,
+       <p style="margin:12px 0 0;font-size:12px;color:#94a3b8">Kopia wysyłana automatycznie w poniedziałki i czwartki o 22:00. Plik zawiera dane osobowe (imiona, e-maile, salda) – nie przekazuj go dalej.</p>`,
     ),
   };
 }
