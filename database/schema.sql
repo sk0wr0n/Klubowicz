@@ -2972,6 +2972,7 @@ revoke all on function public._member_balance(uuid, uuid) from public, anon, aut
 revoke all on function public._kick_mailer() from public, anon, authenticated;
 grant execute on function public._claim_outbox(integer) to service_role;
 grant execute on function public._member_balance(uuid, uuid) to service_role;
+grant select, update on public.notification_outbox to service_role;
 
 -- ponawianie (np. gdy Gmail chwilowo odrzuci) co 10 minut
 do $$
