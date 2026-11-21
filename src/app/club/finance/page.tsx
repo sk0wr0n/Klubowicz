@@ -12,6 +12,7 @@ import BillingModeHistory from '@/components/BillingModeHistory';
 import { useToast } from '@/components/Toast';
 import CopyField from '@/components/CopyField';
 import TransactionList from '@/components/TransactionList';
+import UpcomingCharges from '@/components/UpcomingCharges';
 import { ConfirmModal, ErrorBox, PageTitle, Spinner } from '@/components/ui';
 
 export default function FinancePage() {
@@ -75,6 +76,8 @@ export default function FinancePage() {
           {balance < 0 ? `Do zapłaty: ${money(due)}` : balance > 0 ? 'Nadpłata – masz środki na kolejne treningi' : 'Wszystko rozliczone'}
         </p>
       </div>
+
+      {!loading && userId && <UpcomingCharges userId={userId} balance={balance} />}
 
       {ctx.my_billing_mode && userId && (
         <div className="card mb-4 flex flex-col gap-3">

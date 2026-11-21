@@ -1900,7 +1900,7 @@ grant update (full_name, avatar_url) on public.profiles to authenticated;
 -- clubs: bez pending_owner_email i licznika
 grant select (id, name, prefix, invite_code, bank_account, bank_recipient, monthly_fee_amount,
               single_training_fee_amount, cancellation_deadline_hours, late_cancel_fee_enabled,
-              default_max_participants, default_location, created_at)
+              default_max_participants, default_location, auto_monthly_fee, auto_monthly_fee_from, created_at)
   on public.clubs to authenticated;
 
 -- club_members: bez aliasów (aliasy widzi tylko Właściciel przez admin_list_members)
