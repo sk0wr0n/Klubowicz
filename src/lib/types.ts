@@ -131,6 +131,7 @@ export interface Transaction {
   description: string | null;
   booked_at: string;
   created_at: string;
+  tournament_id?: string | null;
 }
 
 export interface AdminMember {

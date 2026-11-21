@@ -13,6 +13,7 @@ import { useToast } from '@/components/Toast';
 import CopyField from '@/components/CopyField';
 import TransactionList from '@/components/TransactionList';
 import UpcomingCharges from '@/components/UpcomingCharges';
+import MyTournaments from '@/components/MyTournaments';
 import { ConfirmModal, ErrorBox, PageTitle, Spinner } from '@/components/ui';
 
 export default function FinancePage() {
@@ -45,7 +46,7 @@ export default function FinancePage() {
     if (!userId) return;
     supabase()
       .from('transactions')
-      .select('id, club_id, user_id, amount, type, description, booked_at, created_at')
+      .select('id, club_id, user_id, amount, type, description, booked_at, created_at, tournament_id')
       .eq('club_id', clubId)
       .eq('user_id', userId)
       .order('booked_at', { ascending: false })
@@ -78,6 +79,7 @@ export default function FinancePage() {
       </div>
 
       {!loading && userId && <UpcomingCharges userId={userId} balance={balance} />}
+      {!loading && userId && <MyTournaments userId={userId} items={items} />}
 
       {ctx.my_billing_mode && userId && (
         <div className="card mb-4 flex flex-col gap-3">
