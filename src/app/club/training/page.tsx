@@ -378,6 +378,17 @@ export default function TrainingPage() {
                 {main.length >= training.max_participants ? 'Zapisz mnie na listę rezerwową' : 'Zapisz się na trening'}
               </button>
             )}
+            {open && isPerSession && fee > 0 && (
+              <p className="rounded-lg bg-indigo-50 px-3 py-2 text-xs text-indigo-800">
+                💳 Opłata <strong>{money(fee)}</strong> zostanie naliczona <strong>po treningu</strong>, gdy Opiekun potwierdzi
+                obecność – nie w momencie zapisu. Wypisanie się do {deadline} h przed treningiem jest bezpłatne.
+              </p>
+            )}
+            {open && !isPerSession && (
+              <p className="text-center text-xs text-slate-400">
+                Płacisz składkę miesięczną – za ten trening nic nie dopłacasz.
+              </p>
+            )}
             {open && mine && mine.status !== 'late_cancel' && (
               <>
                 <div className="grid grid-cols-2 gap-2">
@@ -616,8 +627,12 @@ export default function TrainingPage() {
         title="Potwierdź udział"
         message={
           <>
-            Zapisanie się na ten trening obciąży Twoje saldo w klubie <strong>{ctx.club.name}</strong> kwotą{' '}
-            <strong>{money(fee)}</strong>. Czy potwierdzasz udział?
+            Za udział w treningu Twoje saldo w klubie <strong>{ctx.club.name}</strong> zostanie obciążone kwotą{' '}
+            <strong>{money(fee)}</strong>.
+            <p className="mt-2">
+              Opłata nalicza się <strong>po treningu</strong>, gdy Opiekun potwierdzi obecność – teraz saldo się nie zmieni.
+              Wypisanie się do {deadline} h przed treningiem jest bezpłatne.
+            </p>
             {main.length >= training.max_participants && (
               <p className="mt-2 text-amber-700">
                 Lista jest pełna – trafisz na listę rezerwową. Opłata zostanie naliczona tylko, jeśli faktycznie zagrasz.
