@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ChevronRight, Clock, ShieldCheck, Users, Volleyball } from 'lucide-react';
+import { ChevronRight, Clock, RefreshCw, ShieldCheck, Users, Volleyball } from 'lucide-react';
 import { useAuth, useRequireAuth } from '@/lib/auth';
 import { clubHref, setLastClub } from '@/lib/nav';
 import { ROLE_LABEL } from '@/lib/types';
@@ -20,10 +20,50 @@ export default function ClubsPage() {
     if (ok) void refreshMemberships();
   }, [ok, refreshMemberships]);
 
-  if (!ok || !membershipsLoaded) return <FullScreenLoader />;
-
   const active = memberships.filter((m) => m.status === 'active');
   const pending = memberships.filter((m) => m.status === 'pending');
+  const waitingOnly = active.length === 0 && pending.length > 0;
+
+  // Czekając na akceptację: sprawdzaj co 20 s i po akceptacji przejdź prosto do klubu
+  useEffect(() => {
+    if (!ok || !waitingOnly) return;
+    const t = setInterval(async () => {
+      const list = await refreshMemberships();
+      const nowActive = list.filter((m) => m.status === 'active');
+      if (nowActive.length === 1) {
+        setLastClub(nowActive[0].club_id);
+        router.replace(clubHref(nowActive[0].club_id));
+      }
+    }, 20000);
+    return () => clearInterval(t);
+  }, [ok, waitingOnly, refreshMemberships, router]);
+
+  if (!ok || !membershipsLoaded) return <FullScreenLoader />;
+
+  if (waitingOnly) {
+    return (
+      <>
+        <AppHeader />
+        <main className="mx-auto flex max-w-3xl flex-col items-center gap-4 p-6 pt-16 text-center">
+          <span className="flex h-16 w-16 items-center justify-center rounded-full bg-amber-100">
+            <Clock className="h-9 w-9 text-amber-600" />
+          </span>
+          <h1 className="text-2xl font-bold">Czekasz na akceptację</h1>
+          <p className="max-w-sm text-slate-600">
+            Twoje zgłoszenie do klubu{pending.length > 1 ? 'ów' : ''}{' '}
+            <strong>{pending.map((m) => m.club_name).join(', ')}</strong> zostało wysłane. Właściciel klubu musi je
+            zatwierdzić – nic więcej nie musisz robić.
+          </p>
+          <p className="max-w-sm text-sm text-slate-500">
+            Ta strona sprawdza to sama co kilkanaście sekund. Po akceptacji od razu zobaczysz treningi klubu.
+          </p>
+          <button className="btn btn-secondary mt-2" onClick={() => void refreshMemberships()}>
+            <RefreshCw className="h-4 w-4" /> Sprawdź teraz
+          </button>
+        </main>
+      </>
+    );
+  }
 
   function joinByCode(e: React.FormEvent) {
     e.preventDefault();
