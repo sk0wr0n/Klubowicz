@@ -31,6 +31,8 @@ export default function TournamentFormModal({
   const [fee, setFee] = useState('');
   const [deadline, setDeadline] = useState(todayInput());
   const [notes, setNotes] = useState('');
+  const [estCost, setEstCost] = useState('');
+  const [costNotes, setCostNotes] = useState('');
   const [busy, setBusy] = useState(false);
 
   const closed = tournament?.status === 'closed';
@@ -47,6 +49,8 @@ export default function TournamentFormModal({
       setFee(tournament.entry_fee != null ? String(tournament.entry_fee).replace('.', ',') : '');
       setDeadline(tournament.signup_deadline);
       setNotes(tournament.notes ?? '');
+      setEstCost(tournament.est_cost_per_person != null ? String(tournament.est_cost_per_person).replace('.', ',') : '');
+      setCostNotes(tournament.cost_notes ?? '');
     } else {
       const d = defaultDate ?? todayInput();
       setName('');
@@ -57,6 +61,8 @@ export default function TournamentFormModal({
       setFee('');
       setDeadline(d);
       setNotes('');
+      setEstCost('');
+      setCostNotes('');
     }
   }, [open, tournament, defaultDate]);
 
@@ -65,6 +71,11 @@ export default function TournamentFormModal({
     const feeNum = fee.trim() === '' ? null : Number(fee.replace(',', '.').replace(/\s/g, ''));
     if (feeNum !== null && (Number.isNaN(feeNum) || feeNum < 0)) {
       toast('Wpisowe musi być liczbą (np. 300).', 'error');
+      return;
+    }
+    const estNum = estCost.trim() === '' ? null : Number(estCost.replace(',', '.').replace(/\s/g, ''));
+    if (estNum !== null && (Number.isNaN(estNum) || estNum < 0)) {
+      toast('Przewidywany koszt musi być liczbą (np. 500).', 'error');
       return;
     }
     if (endsOn && endsOn < startsOn) {
@@ -83,6 +94,8 @@ export default function TournamentFormModal({
       p_entry_fee: feeNum,
       p_signup_deadline: deadline,
       p_notes: notes,
+      p_est_cost: estNum,
+      p_cost_notes: costNotes,
     });
     setBusy(false);
     if (error) {
@@ -143,6 +156,25 @@ export default function TournamentFormModal({
               ? 'Zapisy są zamknięte – kwotę wpisowego może zmienić tylko Opiekun.'
               : 'Opcjonalne, ale potrzebne do zamknięcia zapisów. Kwota zostanie podzielona po równo na zapisanych.'}
           </p>
+        </div>
+        <div className="rounded-xl border border-amber-200 bg-amber-50/50 p-3">
+          <label className="label">Przewidywany koszt na osobę – ok. (zł)</label>
+          <input
+            className="input"
+            inputMode="decimal"
+            value={estCost}
+            onChange={(e) => setEstCost(e.target.value)}
+            placeholder="np. 500 – wpisowe + nocleg itd."
+          />
+          <label className="label mt-2">Na co (opis kosztów)</label>
+          <textarea
+            className="input min-h-[60px]"
+            maxLength={500}
+            value={costNotes}
+            onChange={(e) => setCostNotes(e.target.value)}
+            placeholder="np. wpisowe ok. 50 zł, 3 noclegi 450 zł, wyżywienie w cenie"
+          />
+          <p className="mt-1 text-xs text-slate-500">Orientacyjnie, żeby każdy wiedział, na jaki wydatek się pisze. Nic nie nalicza.</p>
         </div>
         <div>
           <label className="label">Link do wydarzenia (opcjonalnie)</label>

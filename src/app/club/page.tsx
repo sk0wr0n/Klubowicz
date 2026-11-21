@@ -19,7 +19,7 @@ import { EmptyState, ErrorBox, PageTitle, Spinner } from '@/components/ui';
 import { InstallBanner } from '@/components/InstallHelp';
 
 const TSELECT =
-  'id, club_id, name, location, starts_on, ends_on, event_url, entry_fee, signup_deadline, notes, status, closed_at, created_by, created_at, tournament_signups(user_id)';
+  'id, club_id, name, location, starts_on, ends_on, event_url, entry_fee, signup_deadline, notes, est_cost_per_person, cost_notes, status, closed_at, created_by, created_at, tournament_signups(user_id)';
 
 const SELECT =
   'id, club_id, title, location, starts_at, ends_at, max_participants, notes, status, settled_at, training_signups(user_id, status)';

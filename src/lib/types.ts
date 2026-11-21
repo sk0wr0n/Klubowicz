@@ -236,6 +236,8 @@ export interface Tournament {
   entry_fee: number | null;
   signup_deadline: string; // RRRR-MM-DD
   notes: string | null;
+  est_cost_per_person: number | null;
+  cost_notes: string | null;
   status: 'open' | 'closed';
   closed_at: string | null;
   created_by: string | null;

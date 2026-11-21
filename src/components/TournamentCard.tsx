@@ -39,7 +39,11 @@ export default function TournamentCard({ t, clubId, userId }: { t: Tournament; c
               <Users className="h-3.5 w-3.5" />
               {count} {count === 1 ? 'osoba' : count >= 2 && count <= 4 ? 'osoby' : 'osób'}
             </span>
-            {t.entry_fee != null && <span>wpisowe {money(t.entry_fee)}</span>}
+            {t.est_cost_per_person != null ? (
+              <span className="font-medium text-amber-800">ok. {money(t.est_cost_per_person)} / os.</span>
+            ) : (
+              t.entry_fee != null && <span>wpisowe {money(t.entry_fee)}</span>
+            )}
           </p>
         </div>
         <div className="flex flex-col items-end gap-1">

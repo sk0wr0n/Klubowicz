@@ -2091,9 +2091,15 @@ begin
 end $$;
 
 -- Dodanie / edycja turnieju (każdy aktywny członek). Kwotę wpisowego po zamknięciu zmienia tylko Opiekun.
+-- Przewidywany koszt na osobę (orientacyjnie) + opis, np. „wpisowe ok. 50 zł, 3 noclegi 450 zł, wyżywienie w cenie”
+alter table public.tournaments add column if not exists est_cost_per_person numeric(10,2) check (est_cost_per_person is null or est_cost_per_person >= 0);
+alter table public.tournaments add column if not exists cost_notes text check (cost_notes is null or char_length(cost_notes) <= 500);
+drop function if exists public.save_tournament(uuid, uuid, text, text, date, date, text, numeric, date, text);
+
 create or replace function public.save_tournament(
   p_club uuid, p_id uuid, p_name text, p_location text, p_starts_on date, p_ends_on date,
-  p_event_url text, p_entry_fee numeric, p_signup_deadline date, p_notes text
+  p_event_url text, p_entry_fee numeric, p_signup_deadline date, p_notes text,
+  p_est_cost numeric default null, p_cost_notes text default null
 )
 returns uuid language plpgsql volatile security definer set search_path = public as $$
 declare
@@ -2113,12 +2119,14 @@ begin
   if p_ends_on is not null and p_ends_on < p_starts_on then raise exception 'Data końca jest przed datą początku.'; end if;
   if v_url is not null and v_url !~* '^https?://' then v_url := 'https://' || v_url; end if;
   if p_entry_fee is not null and p_entry_fee < 0 then raise exception 'Wpisowe nie może być ujemne.'; end if;
+  if p_est_cost is not null and p_est_cost < 0 then raise exception 'Przewidywany koszt nie może być ujemny.'; end if;
 
   if p_id is null then
     insert into public.tournaments (club_id, name, location, starts_on, ends_on, event_url, entry_fee,
-                                    signup_deadline, notes, created_by)
+                                    signup_deadline, notes, est_cost_per_person, cost_notes, created_by)
     values (p_club, trim(p_name), trim(p_location), p_starts_on, p_ends_on, v_url, round(p_entry_fee, 2),
-            p_signup_deadline, nullif(trim(coalesce(p_notes, '')), ''), v_uid)
+            p_signup_deadline, nullif(trim(coalesce(p_notes, '')), ''), round(p_est_cost, 2),
+            nullif(left(trim(coalesce(p_cost_notes, '')), 500), ''), v_uid)
     returning id into v_id;
     -- autor od razu zapisany
     insert into public.tournament_signups (tournament_id, club_id, user_id) values (v_id, p_club, v_uid);
@@ -2137,7 +2145,9 @@ begin
   update public.tournaments set
     name = trim(p_name), location = trim(p_location), starts_on = p_starts_on, ends_on = p_ends_on,
     event_url = v_url, entry_fee = round(p_entry_fee, 2), signup_deadline = p_signup_deadline,
-    notes = nullif(trim(coalesce(p_notes, '')), '')
+    notes = nullif(trim(coalesce(p_notes, '')), ''),
+    est_cost_per_person = round(p_est_cost, 2),
+    cost_notes = nullif(left(trim(coalesce(p_cost_notes, '')), 500), '')
   where id = p_id;
 
   perform public._tournament_recalc(p_id);
@@ -2344,7 +2354,7 @@ end $$;
 
 revoke all on function public._paid_charges(uuid, uuid) from public, anon, authenticated;
 revoke all on function public._tournament_recalc(uuid) from public, anon, authenticated;
-revoke all on function public.save_tournament(uuid, uuid, text, text, date, date, text, numeric, date, text) from public, anon;
+revoke all on function public.save_tournament(uuid, uuid, text, text, date, date, text, numeric, date, text, numeric, text) from public, anon;
 revoke all on function public.delete_tournament(uuid) from public, anon;
 revoke all on function public.join_tournament(uuid) from public, anon;
 revoke all on function public.leave_tournament(uuid) from public, anon;
@@ -2355,7 +2365,7 @@ revoke all on function public.reopen_tournament(uuid) from public, anon;
 revoke all on function public.add_tournament_extra(uuid, uuid[], numeric, text) from public, anon;
 revoke all on function public.delete_tournament_extra(uuid) from public, anon;
 revoke all on function public.tournament_participants(uuid) from public, anon;
-grant execute on function public.save_tournament(uuid, uuid, text, text, date, date, text, numeric, date, text) to authenticated;
+grant execute on function public.save_tournament(uuid, uuid, text, text, date, date, text, numeric, date, text, numeric, text) to authenticated;
 grant execute on function public.delete_tournament(uuid) to authenticated;
 grant execute on function public.join_tournament(uuid) to authenticated;
 grant execute on function public.leave_tournament(uuid) to authenticated;

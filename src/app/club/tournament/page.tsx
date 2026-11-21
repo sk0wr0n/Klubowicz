@@ -275,6 +275,18 @@ export default function TournamentPage() {
         </div>
         {t.notes && <p className="mt-3 whitespace-pre-wrap rounded-xl bg-slate-50 p-3 text-sm text-slate-700">{t.notes}</p>}
 
+        {(t.est_cost_per_person != null || t.cost_notes) && (
+          <div className="mt-3 rounded-xl border border-amber-300 bg-white p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">Przewidywany koszt na osobę</p>
+            {t.est_cost_per_person != null && (
+              <p className="text-2xl font-bold text-slate-900">
+                ok. {money(t.est_cost_per_person)}
+              </p>
+            )}
+            {t.cost_notes && <p className="mt-0.5 whitespace-pre-wrap text-sm text-slate-600">{t.cost_notes}</p>}
+            <p className="mt-1 text-[11px] text-slate-400">Kwota orientacyjna – dokładne obciążenia nalicza Opiekun.</p>
+          </div>
+        )}
         <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-900">💰 {info}</p>
 
         {me && (me.fee_amount != null || me.extras_amount != null) && (
