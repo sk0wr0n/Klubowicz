@@ -136,14 +136,18 @@ export default function TrainingsPage() {
         subtitle="Treningi i turnieje"
         action={
           <div className="flex shrink-0 gap-2">
-            <button className="btn btn-secondary btn-sm border-amber-300 text-amber-800" onClick={() => setTourOpen(true)}>
+            <button
+              className="btn btn-secondary btn-sm border-amber-300 px-2.5 text-amber-800"
+              onClick={() => setTourOpen(true)}
+              aria-label="Dodaj turniej"
+            >
+              <Plus className="h-4 w-4" />
               <Trophy className="h-4 w-4" /> Turniej
             </button>
-            {isStaff && (
-              <button className="btn btn-primary btn-sm" onClick={() => setFormOpen(true)}>
-                <Plus className="h-4 w-4" /> Trening
-              </button>
-            )}
+            <button className="btn btn-primary btn-sm px-2.5" onClick={() => setFormOpen(true)} aria-label="Dodaj trening">
+              <Plus className="h-4 w-4" />
+              <CalendarDays className="h-4 w-4" /> Trening
+            </button>
           </div>
         }
       />
@@ -199,7 +203,7 @@ export default function TrainingsPage() {
             </div>
           ) : upcoming.length === 0 ? (
             <EmptyState icon={<CalendarDays className="h-12 w-12" />} title="Brak zaplanowanych treningów">
-              {isStaff ? 'Dodaj pierwszy trening przyciskiem „Nowy”.' : 'Opiekun klubu jeszcze nie dodał terminów.'}
+              Dodaj trening przyciskiem „+ Trening” na górze.
             </EmptyState>
           ) : (
             <div className="flex flex-col gap-3">
@@ -240,11 +244,9 @@ export default function TrainingsPage() {
               {dayItems.length === 0 && dayTours.length > 0 ? null : dayItems.length === 0 ? (
                 <div className="card text-sm text-slate-500">
                   Brak treningów tego dnia.
-                  {isStaff && (
-                    <button className="btn btn-secondary btn-sm ml-2" onClick={() => setFormOpen(true)}>
-                      <Plus className="h-3.5 w-3.5" /> Dodaj
-                    </button>
-                  )}
+                  <button className="btn btn-secondary btn-sm ml-2" onClick={() => setFormOpen(true)}>
+                    <Plus className="h-3.5 w-3.5" /> Dodaj
+                  </button>
                 </div>
               ) : (
                 <div className="flex flex-col gap-3">

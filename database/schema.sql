@@ -613,23 +613,24 @@ create policy club_members_select on public.club_members for select to authentic
     or public.is_superadmin()
   );
 
--- TRAININGS: odczyt – członkowie klubu; tworzenie/edycja/usuwanie – Opiekun i Właściciel
+-- TRAININGS: odczyt i tworzenie – członkowie klubu; edycja/usuwanie – Opiekun, Właściciel lub autor
 drop policy if exists trainings_select on public.trainings;
 create policy trainings_select on public.trainings for select to authenticated
   using (public.is_club_member(club_id) or public.is_superadmin());
 
 drop policy if exists trainings_insert on public.trainings;
 create policy trainings_insert on public.trainings for insert to authenticated
-  with check (public.is_club_staff(club_id));
+  with check (public.is_club_member(club_id));
 
+-- edycja/odwołanie/usunięcie: Opiekun/Właściciel albo autor treningu
 drop policy if exists trainings_update on public.trainings;
 create policy trainings_update on public.trainings for update to authenticated
-  using (public.is_club_staff(club_id) and status <> 'settled')
-  with check (public.is_club_staff(club_id) and status in ('scheduled', 'cancelled'));
+  using ((public.is_club_staff(club_id) or (created_by = auth.uid() and public.is_club_member(club_id))) and status <> 'settled')
+  with check ((public.is_club_staff(club_id) or (created_by = auth.uid() and public.is_club_member(club_id))) and status in ('scheduled', 'cancelled'));
 
 drop policy if exists trainings_delete on public.trainings;
 create policy trainings_delete on public.trainings for delete to authenticated
-  using (public.is_club_staff(club_id) and status <> 'settled');
+  using ((public.is_club_staff(club_id) or (created_by = auth.uid() and public.is_club_member(club_id))) and status <> 'settled');
 
 -- TRAINING_SIGNUPS: odczyt – członkowie klubu.
 -- Zapis WYŁĄCZNIE przez RPC (join_training/leave_training/staff_add_signup...),

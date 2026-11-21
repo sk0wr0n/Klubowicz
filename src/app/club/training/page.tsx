@@ -620,6 +620,32 @@ export default function TrainingPage() {
               </button>
             </div>
           )}
+
+          {/* Autor treningu (bez roli Opiekuna) może go edytować, odwołać lub usunąć */}
+          {!isStaff && training.created_by === userId && training.status !== 'settled' && (
+            <div className="card mb-4 flex flex-col gap-2">
+              <h2 className="font-semibold">Twój trening</h2>
+              <p className="text-xs text-slate-500">Dodałeś ten trening – możesz go zmienić. Obecność sprawdza Opiekun.</p>
+              {training.status === 'scheduled' && (
+                <div className="grid grid-cols-2 gap-2">
+                  <button className="btn btn-secondary" onClick={() => setEditOpen(true)}>
+                    <Pencil className="h-4 w-4" /> Edytuj
+                  </button>
+                  <button className="btn btn-secondary text-red-600" onClick={() => setConfirm('cancel')}>
+                    <Ban className="h-4 w-4" /> Odwołaj
+                  </button>
+                </div>
+              )}
+              {training.status === 'cancelled' && (
+                <button className="btn btn-secondary" onClick={() => setConfirm('restore')}>
+                  <RefreshCw className="h-4 w-4" /> Przywróć trening
+                </button>
+              )}
+              <button className="btn btn-ghost text-red-600" onClick={() => setConfirm('delete')}>
+                <Trash2 className="h-4 w-4" /> Usuń trening
+              </button>
+            </div>
+          )}
         </>
       )}
 

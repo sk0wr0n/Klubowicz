@@ -102,6 +102,7 @@ export interface Training {
   notes: string | null;
   status: TrainingStatus;
   settled_at?: string | null;
+  created_by?: string | null;
   training_signups?: SignupLite[];
 }
 
