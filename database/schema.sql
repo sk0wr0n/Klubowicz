@@ -4061,6 +4061,57 @@ grant execute on function public.set_bank_balance(uuid, date, numeric) to authen
 grant execute on function public.bank_overview(uuid) to authenticated;
 grant execute on function public.bank_history(uuid, text) to authenticated;
 
+-- Bez adresów w historii przelewów: z nadawcy/odbiorcy zostaje samo imię i nazwisko (nazwa)
+create or replace function public._strip_address(p text)
+returns text language plpgsql immutable set search_path = public as $$
+declare
+  tok text;
+  out text[] := '{}';
+begin
+  if p is null then return null; end if;
+  foreach tok in array regexp_split_to_array(trim(p), '\s+') loop
+    exit when tok ~ '\d'
+           or tok ~* '^(ul|al|os|pl|ulica|aleja|aleje|osiedle|plac)\.?$'
+           or tok ~* '^(ul|al|os|pl)\.\S+';
+    out := out || tok;
+  end loop;
+  return nullif(array_to_string(out, ' '), '');
+end $$;
+revoke all on function public._strip_address(text) from public, anon, authenticated;
+
+-- istniejące dane
+update public.bank_statement_rows set counterparty = public._strip_address(counterparty)
+where counterparty is distinct from public._strip_address(counterparty);
+
+update public.transactions t
+set description = regexp_replace(t.description, '\(([^()]*)\)\s*$',
+                                 coalesce('(' || public._strip_address(substring(t.description from '\(([^()]*)\)\s*$')) || ')', ''))
+where t.bank_hash is not null and t.description ~ '\([^()]*\)\s*$'
+  and substring(t.description from '\(([^()]*)\)\s*$') is distinct from public._strip_address(substring(t.description from '\(([^()]*)\)\s*$'));
+
+-- nowe dane: wyciąg i opisy wpłat z importu
+create or replace function public._bank_row_strip()
+returns trigger language plpgsql set search_path = public as $$
+begin
+  new.counterparty := public._strip_address(new.counterparty);
+  return new;
+end $$;
+drop trigger if exists bank_statement_rows_strip on public.bank_statement_rows;
+create trigger bank_statement_rows_strip before insert or update of counterparty on public.bank_statement_rows
+  for each row execute function public._bank_row_strip();
+
+do $$
+declare v_def text;
+begin
+  v_def := pg_get_functiondef('public.import_bank_payments(uuid, jsonb)'::regprocedure);
+  if position('_strip_address' in v_def) = 0 then
+    v_def := replace(v_def, 'case when coalesce(r ->> ''sender'', '''') <> '''' then '' ('' || (r ->> ''sender'') || '')'' else '''' end',
+                            'case when coalesce(public._strip_address(r ->> ''sender''), '''') <> '''' then '' ('' || public._strip_address(r ->> ''sender'') || '')'' else '''' end');
+    if position('_strip_address' in v_def) = 0 then raise exception 'import_bank_payments: nie udało się podmienić'; end if;
+    execute v_def;
+  end if;
+end $$;
+
 -- Harmonogram: 1. dnia miesiąca o 05:00 UTC (06:00 zimą / 07:00 latem w Polsce)
 do $$
 begin
