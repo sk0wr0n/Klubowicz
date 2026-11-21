@@ -57,6 +57,7 @@ export interface ClubContextData {
   my_member_id: string | null;
   my_member_code: string | null;
   my_billing_mode: BillingMode | null;
+  my_position?: string | null;
   subscription_status: SubStatus;
   is_superadmin: boolean;
   balances_updated_at?: string | null;
@@ -73,6 +74,7 @@ export interface ClubMemberRow {
   status: MemberStatus;
   billing_mode: BillingMode;
   member_code: string | null;
+  position?: string | null;
   profiles: { full_name: string | null; avatar_url: string | null } | null;
 }
 

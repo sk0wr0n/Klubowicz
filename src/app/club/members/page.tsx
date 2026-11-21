@@ -7,12 +7,14 @@ import { errMsg, supabase } from '@/lib/supabase';
 import { money } from '@/lib/format';
 import { BILLING_LABEL, ROLE_LABEL, type AdminMember, type BillingMode } from '@/lib/types';
 import BillingModeHistory from '@/components/BillingModeHistory';
+import { PositionBadge } from '@/components/Position';
+import { POSITIONS, POSITION_LABEL } from '@/lib/positions';
 import OwnerGuard from '@/components/OwnerGuard';
 import { useToast } from '@/components/Toast';
 import { Avatar, ConfirmModal, ErrorBox, PageTitle, Spinner } from '@/components/ui';
 
 export default function MembersPage() {
-  const { clubId, reload: reloadCtx, reloadMembers, nameOf } = useClub();
+  const { clubId, reload: reloadCtx, reloadMembers, nameOf, memberMap } = useClub();
   const [historyKey, setHistoryKey] = useState(0);
   const toast = useToast();
   const [list, setList] = useState<AdminMember[]>([]);
@@ -126,6 +128,7 @@ export default function MembersPage() {
                     <span className="chip bg-slate-100 text-slate-600">
                       {m.billing_mode === 'monthly' ? 'abonament' : 'za trening'}
                     </span>
+                    <PositionBadge position={memberMap[m.user_id]?.position} />
                   </p>
                 </div>
                 <span className={`text-sm font-semibold ${Number(m.balance) < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
@@ -137,6 +140,29 @@ export default function MembersPage() {
               {expanded && (
                 <div className="flex flex-col gap-4 border-t border-slate-100 p-4">
                   <p className="text-xs text-slate-500">{m.email}</p>
+
+                  <div>
+                    <label className="label">Pozycja na boisku</label>
+                    <select
+                      className="input"
+                      value={memberMap[m.user_id]?.position ?? ''}
+                      disabled={busy}
+                      onChange={(e) =>
+                        void call(
+                          'set_member_position',
+                          { p_member_id: m.member_id, p_position: e.target.value || null },
+                          'Zmieniono pozycję.'
+                        )
+                      }
+                    >
+                      <option value="">— nie wybrano —</option>
+                      {POSITIONS.map((p) => (
+                        <option key={p} value={p}>
+                          {POSITION_LABEL[p]}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
 
                   <div>
                     <label className="label">Tryb rozliczeń</label>

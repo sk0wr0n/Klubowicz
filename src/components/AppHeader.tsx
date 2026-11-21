@@ -2,12 +2,13 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
-import { Check, ChevronDown, LayoutGrid, LogOut, ShieldCheck, SquarePlus, User, Volleyball } from 'lucide-react';
+import { Check, ChevronDown, LayoutGrid, LogOut, ShieldCheck, Shirt, SquarePlus, User, Volleyball } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { clubHref, setLastClub } from '@/lib/nav';
 import { ROLE_LABEL } from '@/lib/types';
 import { Avatar } from './ui';
 import { openInstallHelp } from './InstallHelp';
+import { openPositionModal } from './Position';
 
 export default function AppHeader({ clubId, clubName }: { clubId?: string; clubName?: string }) {
   const { profile, memberships, signOut } = useAuth();
@@ -92,6 +93,17 @@ export default function AppHeader({ clubId, clubName }: { clubId?: string; clubN
                 >
                   <LayoutGrid className="h-4 w-4" /> Moje kluby
                 </Link>
+                {clubId && (
+                  <button
+                    onClick={() => {
+                      setUserOpen(false);
+                      openPositionModal();
+                    }}
+                    className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                  >
+                    <Shirt className="h-4 w-4" /> Moja pozycja na boisku
+                  </button>
+                )}
                 <button
                   onClick={() => {
                     setUserOpen(false);

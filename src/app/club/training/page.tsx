@@ -24,6 +24,7 @@ import { formatDay, formatTime, hoursUntil, money } from '@/lib/format';
 import { clubHref } from '@/lib/nav';
 import type { Attendance, Signup, Training } from '@/lib/types';
 import MemberPicker from '@/components/MemberPicker';
+import { PositionBadge, PositionSummary } from '@/components/Position';
 import TrainingFormModal from '@/components/TrainingFormModal';
 import { StatusBadge } from '@/components/TrainingCard';
 import { useToast } from '@/components/Toast';
@@ -258,6 +259,7 @@ export default function TrainingPage() {
           </p>
           {s.added_by_staff && <p className="text-[11px] text-slate-400">dopisany przez opiekuna</p>}
         </div>
+        <PositionBadge position={m?.position} />
         {s.has_car && <Car className="h-4 w-4 text-sky-600" aria-label="Będę autem" />}
         {s.wants_beer && <Beer className="h-4 w-4 text-amber-500" aria-label="Integracja po treningu" />}
         {right}
@@ -417,6 +419,9 @@ export default function TrainingPage() {
               Anuluj
             </button>
           </div>
+          <div className="mb-2">
+            <PositionSummary positions={[...present].map((u) => memberMap[u]?.position)} />
+          </div>
           <p className="mb-3 text-xs text-slate-500">
             Zaznacz osoby faktycznie obecne. Odznacz nieobecnych. Osoby, które przyszły, ale nie zapisały się w aplikacji,
             dodaj przyciskiem poniżej.
@@ -499,6 +504,11 @@ export default function TrainingPage() {
                 Zapisani: {main.length} / {training.max_participants} miejsc
               </span>
             </div>
+            {main.length > 0 && (
+              <div className="mb-2 mt-1">
+                <PositionSummary positions={main.map((s) => memberMap[s.user_id]?.position)} />
+              </div>
+            )}
             {main.length === 0 ? (
               <p className="py-4 text-center text-sm text-slate-400">Nikt jeszcze się nie zapisał.</p>
             ) : (

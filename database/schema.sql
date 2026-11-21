@@ -58,7 +58,7 @@ alter table public.clubs add column if not exists auto_monthly_fee boolean not n
 alter table public.clubs add column if not exists auto_monthly_fee_from text
   check (auto_monthly_fee_from is null or auto_monthly_fee_from ~ '^[0-9]{4}-(0[1-9]|1[0-2])$');
 
--- Członkostwo w klubie + rola w klubie
+-- Członkostwo w klubie + rola w klubie (kolumna position dodawana niżej – ALTER dla istniejących baz)
 create table if not exists public.club_members (
   id           uuid primary key default gen_random_uuid(),
   club_id      uuid not null references public.clubs (id) on delete cascade,
@@ -74,6 +74,9 @@ create table if not exists public.club_members (
   unique (club_id, member_code)
 );
 create index if not exists club_members_user_idx on public.club_members (user_id, status);
+-- Pozycja na boisku (siatkówka): rozgrywający, przyjmujący, atakujący, środkowy, libero
+alter table public.club_members add column if not exists position text
+  check (position is null or position in ('setter', 'outside', 'opposite', 'middle', 'libero'));
 create index if not exists club_members_club_idx on public.club_members (club_id, status);
 
 -- Treningi
@@ -664,9 +667,10 @@ begin
   end if;
 end $$;
 
--- Dołączenie do klubu z wyborem trybu rozliczeń (abonament / za trening)
+-- Dołączenie do klubu z wyborem trybu rozliczeń i pozycji na boisku
 drop function if exists public.join_club_by_code(text);
-create or replace function public.join_club_by_code(p_code text, p_billing_mode text default null)
+drop function if exists public.join_club_by_code(text, text);
+create or replace function public.join_club_by_code(p_code text, p_billing_mode text default null, p_position text default null)
 returns table (club_id uuid, club_name text, status text)
 language plpgsql volatile security definer set search_path = public as $$
 declare
@@ -674,25 +678,60 @@ declare
   v_club public.clubs%rowtype;
   v_status text;
   v_mode text := nullif(trim(coalesce(p_billing_mode, '')), '');
+  v_pos  text := nullif(trim(coalesce(p_position, '')), '');
 begin
   if v_mode is not null and v_mode not in ('monthly', 'per_session') then
     raise exception 'Nieprawidłowy tryb rozliczeń.';
+  end if;
+  if v_pos is not null and v_pos not in ('setter', 'outside', 'opposite', 'middle', 'libero') then
+    raise exception 'Nieprawidłowa pozycja.';
   end if;
   select * into v_club from public.clubs where invite_code = upper(trim(p_code));
   if not found then
     raise exception 'Nieprawidłowy lub nieaktualny link zapraszający.';
   end if;
 
-  insert into public.club_members (club_id, user_id, role, status, billing_mode)
-  values (v_club.id, v_uid, 'member', 'pending', coalesce(v_mode, 'per_session'))
+  insert into public.club_members (club_id, user_id, role, status, billing_mode, position)
+  values (v_club.id, v_uid, 'member', 'pending', coalesce(v_mode, 'per_session'), v_pos)
   on conflict on constraint club_members_club_id_user_id_key do update
     set status = case when public.club_members.status = 'removed' then 'pending'
                       else public.club_members.status end,
         billing_mode = case when public.club_members.status in ('pending', 'removed') and v_mode is not null
-                            then v_mode else public.club_members.billing_mode end
+                            then v_mode else public.club_members.billing_mode end,
+        position = coalesce(v_pos, public.club_members.position)
   returning public.club_members.status into v_status;
 
   return query select v_club.id, v_club.name, v_status;
+end $$;
+
+-- Zawodnik ustawia swoją pozycję
+create or replace function public.set_my_position(p_club uuid, p_position text)
+returns void language plpgsql volatile security definer set search_path = public as $$
+declare
+  v_uid uuid := public._require_uid();
+begin
+  if p_position is not null and p_position not in ('setter', 'outside', 'opposite', 'middle', 'libero') then
+    raise exception 'Nieprawidłowa pozycja.';
+  end if;
+  update public.club_members set position = p_position
+  where club_id = p_club and user_id = v_uid and status in ('active', 'pending');
+  if not found then
+    raise exception 'Nie jesteś członkiem tego klubu.' using errcode = '42501';
+  end if;
+end $$;
+
+-- Opiekun/Właściciel poprawia pozycję członka
+create or replace function public.set_member_position(p_member_id uuid, p_position text)
+returns void language plpgsql volatile security definer set search_path = public as $$
+declare v_club uuid;
+begin
+  select club_id into v_club from public.club_members where id = p_member_id;
+  if v_club is null then raise exception 'Nie znaleziono członka.'; end if;
+  perform public._require_staff(v_club);
+  if p_position is not null and p_position not in ('setter', 'outside', 'opposite', 'middle', 'libero') then
+    raise exception 'Nieprawidłowa pozycja.';
+  end if;
+  update public.club_members set position = p_position where id = p_member_id;
 end $$;
 
 -- Zawodnik sam zmienia swój tryb rozliczeń (zmiana od razu, zapis w historii przez trigger)
@@ -760,6 +799,7 @@ begin
     'my_member_id', v_member.id,
     'my_member_code', v_member.member_code,
     'my_billing_mode', v_member.billing_mode,
+    'my_position', v_member.position,
     'subscription_status', v_status,
     'is_superadmin', v_is_sa,
     -- kiedy ostatnio księgowano wpłaty/korekty (import CSV lub ręcznie) i do jakiego dnia sięga import z banku
@@ -1641,7 +1681,7 @@ grant select (id, name, prefix, invite_code, bank_account, bank_recipient, month
   on public.clubs to authenticated;
 
 -- club_members: bez aliasów (aliasy widzi tylko Właściciel przez admin_list_members)
-grant select (id, club_id, user_id, role, status, billing_mode, member_code, joined_at, created_at)
+grant select (id, club_id, user_id, role, status, billing_mode, member_code, position, joined_at, created_at)
   on public.club_members to authenticated;
 
 grant select on public.trainings to authenticated;
@@ -1670,7 +1710,9 @@ grant execute on function public.shares_club_with(uuid) to authenticated;
 -- publiczne RPC (każda sama sprawdza uprawnienia)
 grant execute on function public.my_memberships() to authenticated;
 grant execute on function public.invite_info(text) to authenticated;
-grant execute on function public.join_club_by_code(text, text) to authenticated;
+grant execute on function public.join_club_by_code(text, text, text) to authenticated;
+grant execute on function public.set_my_position(uuid, text) to authenticated;
+grant execute on function public.set_member_position(uuid, text) to authenticated;
 grant execute on function public.set_my_billing_mode(uuid, text) to authenticated;
 grant execute on function public.club_context(uuid) to authenticated;
 grant execute on function public.admin_list_members(uuid) to authenticated;

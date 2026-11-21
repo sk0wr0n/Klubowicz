@@ -5,6 +5,7 @@ import { UserPlus } from 'lucide-react';
 import { useClub } from '@/lib/club';
 import { normalize } from '@/lib/csv';
 import { Avatar, Modal } from './ui';
+import { PositionBadge } from './Position';
 
 export default function MemberPicker({
   open,
@@ -54,6 +55,7 @@ export default function MemberPicker({
                     {m.member_code} · {m.billing_mode === 'per_session' ? 'płatność za trening' : 'abonament'}
                   </span>
                 </span>
+                <PositionBadge position={m.position} />
                 <UserPlus className="h-4 w-4 text-indigo-600" />
               </button>
             </li>

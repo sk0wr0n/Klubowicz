@@ -9,6 +9,8 @@ import { clubHref, setLastClub, setNext } from '@/lib/nav';
 import { money } from '@/lib/format';
 import type { BillingMode } from '@/lib/types';
 import { ErrorBox, FullScreenLoader, Spinner } from '@/components/ui';
+import { PositionPicker } from '@/components/Position';
+import type { Position } from '@/lib/positions';
 
 /** Odczyt kodu z /join/KOD (przez .htaccess / _redirects) lub /join/?code=KOD */
 function readCode(): string {
@@ -31,6 +33,7 @@ export default function JoinPage() {
   const [code, setCode] = useState<string | null>(null);
   const [info, setInfo] = useState<InviteInfo | null>(null);
   const [mode, setMode] = useState<BillingMode | null>(null);
+  const [position, setPosition] = useState<Position | null>(null);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<{ club_id: string; club_name: string; status: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -66,9 +69,13 @@ export default function JoinPage() {
   }, [ready, session, code]);
 
   async function join() {
-    if (!code || !mode) return;
+    if (!code || !mode || !position) return;
     setBusy(true);
-    const { data, error } = await supabase().rpc('join_club_by_code', { p_code: code, p_billing_mode: mode });
+    const { data, error } = await supabase().rpc('join_club_by_code', {
+      p_code: code,
+      p_billing_mode: mode,
+      p_position: position,
+    });
     setBusy(false);
     if (error) {
       setError(errMsg(error));
@@ -210,9 +217,17 @@ export default function JoinPage() {
         <p className="text-xs text-slate-500">Możesz to zmienić w każdej chwili w zakładce „Finanse”.</p>
       </div>
 
-      <button className="btn btn-primary py-3" disabled={!mode || busy} onClick={() => void join()}>
+      <div className="flex flex-col gap-3">
+        <p className="text-sm font-semibold text-slate-700">Na jakiej pozycji grasz?</p>
+        <PositionPicker value={position} onChange={setPosition} />
+      </div>
+
+      <button className="btn btn-primary py-3" disabled={!mode || !position || busy} onClick={() => void join()}>
         {busy && <Spinner className="h-4 w-4" />} Dołącz do klubu
       </button>
+      {(!mode || !position) && (
+        <p className="-mt-3 text-center text-xs text-slate-500">Wybierz sposób rozliczeń i pozycję, aby dołączyć.</p>
+      )}
     </main>
   );
 }

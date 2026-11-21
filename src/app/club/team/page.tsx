@@ -9,11 +9,12 @@ import { formatDate, money } from '@/lib/format';
 import { ROLE_LABEL, type TeamMember, type Transaction } from '@/lib/types';
 import BalanceUpdateInfo from '@/components/BalanceUpdateInfo';
 import TransactionList from '@/components/TransactionList';
+import { PositionBadge } from '@/components/Position';
 import { Avatar, EmptyState, ErrorBox, Modal, PageTitle, Spinner } from '@/components/ui';
 
 /** Cały zespół i stan kont – dla Opiekuna i Właściciela (tylko odczyt). */
 export default function TeamPage() {
-  const { clubId, isStaff } = useClub();
+  const { clubId, isStaff, memberMap } = useClub();
   const [list, setList] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -98,6 +99,7 @@ export default function TeamPage() {
                         <span className={`chip ${m.billing_mode === 'monthly' ? 'bg-violet-100 text-violet-700' : 'bg-slate-100 text-slate-600'}`}>
                           {m.billing_mode === 'monthly' ? 'abonament' : 'za trening'}
                         </span>
+                        <PositionBadge position={memberMap[m.user_id]?.position} full />
                         {m.role !== 'member' && <span className="chip bg-sky-100 text-sky-700">{ROLE_LABEL[m.role]}</span>}
                         {m.last_present_at && <span>ost. obecność {formatDate(m.last_present_at)}</span>}
                       </span>

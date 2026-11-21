@@ -11,6 +11,7 @@ import { clubHref, setLastClub } from '@/lib/nav';
 import type { ClubContextData, ClubMemberRow } from '@/lib/types';
 import AppHeader from './AppHeader';
 import SubscriptionBanner from './SubscriptionBanner';
+import { MyPositionModal } from './Position';
 import { ErrorBox, FullScreenLoader } from './ui';
 
 export default function ClubShell({ children }: { children: ReactNode }) {
@@ -36,7 +37,7 @@ export default function ClubShell({ children }: { children: ReactNode }) {
     if (!clubId) return;
     const { data } = await supabase()
       .from('club_members')
-      .select('id, user_id, role, status, billing_mode, member_code, profiles(full_name, avatar_url)')
+      .select('id, user_id, role, status, billing_mode, member_code, position, profiles(full_name, avatar_url)')
       .eq('club_id', clubId)
       .eq('status', 'active');
     const rows = ((data ?? []) as unknown as ClubMemberRow[]).sort((a, b) =>
@@ -109,6 +110,7 @@ export default function ClubShell({ children }: { children: ReactNode }) {
     <ClubContext.Provider value={value}>
       <AppHeader clubId={clubId} clubName={value.ctx.club.name} />
       <SubscriptionBanner />
+      <MyPositionModal />
       <main className="mx-auto max-w-3xl p-4 pb-28">{children}</main>
       <nav className="pb-safe fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 backdrop-blur">
         <div className="mx-auto flex max-w-3xl">
