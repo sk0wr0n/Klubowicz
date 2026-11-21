@@ -74,7 +74,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     for (let attempt = 0; attempt < 4; attempt++) {
       const { data, error } = await supabase()
         .from('profiles')
-        .select('id, full_name, avatar_url, is_superadmin')
+        .select('id, full_name, avatar_url, is_superadmin, email_notifications')
         .eq('id', userId)
         .maybeSingle();
       if (!error && data) {

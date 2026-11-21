@@ -2636,6 +2636,226 @@ end $$;
 revoke all on function public.set_member_name(uuid, text) from public, anon;
 grant execute on function public.set_member_name(uuid, text) to authenticated;
 
+-- =====================================================================
+-- POWIADOMIENIA E-MAIL
+--  * Właściciel: od razu, gdy ktoś poprosi o dołączenie do klubu
+--  * Zawodnik: codzienne zestawienie nowych obciążeń (wieczorem)
+--  * Zawodnik: cotygodniowe przypomnienie przy ujemnym saldzie (poniedziałek)
+-- Wiadomości trafiają do kolejki notification_outbox; wysyła je funkcja Edge
+-- „send-notifications” (SMTP), wywoływana przez pg_cron/pg_net.
+-- =====================================================================
+
+create extension if not exists pg_net;
+
+alter table public.profiles add column if not exists email_notifications boolean not null default true;
+grant select (email_notifications) on public.profiles to authenticated;
+grant update (email_notifications) on public.profiles to authenticated;
+
+create table if not exists public.notification_outbox (
+  id         bigserial primary key,
+  club_id    uuid references public.clubs (id) on delete cascade,
+  user_id    uuid references public.profiles (id) on delete cascade,
+  to_email   text not null,
+  kind       text not null check (kind in ('new_member', 'charges', 'debt')),
+  payload    jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  sent_at    timestamptz,
+  attempts   integer not null default 0,
+  last_error text
+);
+create index if not exists notification_outbox_pending_idx on public.notification_outbox (created_at) where sent_at is null;
+alter table public.notification_outbox enable row level security;   -- brak polityk = tylko serwer
+revoke all on public.notification_outbox from anon, authenticated;
+
+create table if not exists public.notify_state (
+  club_id                uuid not null references public.clubs (id) on delete cascade,
+  user_id                uuid not null references public.profiles (id) on delete cascade,
+  last_charge_digest_at  timestamptz,
+  last_debt_reminder_at  timestamptz,
+  primary key (club_id, user_id)
+);
+alter table public.notify_state enable row level security;
+revoke all on public.notify_state from anon, authenticated;
+
+-- Sekret do wywołań funkcji wysyłającej (generowany raz, przechowywany w Vault)
+do $$
+begin
+  if not exists (select 1 from vault.secrets where name = 'klubowicz_cron_secret') then
+    perform vault.create_secret(replace(gen_random_uuid()::text || gen_random_uuid()::text, '-', ''), 'klubowicz_cron_secret');
+  end if;
+end $$;
+
+-- Szturchnięcie funkcji wysyłającej (asynchronicznie przez pg_net), gdy są wiadomości w kolejce
+create or replace function public._kick_mailer()
+returns void language plpgsql volatile security definer set search_path = public as $$
+declare v_secret text;
+begin
+  if not exists (select 1 from public.notification_outbox where sent_at is null and attempts < 5) then
+    return;
+  end if;
+  select decrypted_secret into v_secret from vault.decrypted_secrets where name = 'klubowicz_cron_secret';
+  perform net.http_post(
+    url := 'https://yjvzwakzsiobjujqrwwr.supabase.co/functions/v1/send-notifications',
+    headers := jsonb_build_object('Content-Type', 'application/json', 'x-cron-secret', v_secret),
+    body := '{}'::jsonb,
+    timeout_milliseconds := 30000
+  );
+exception when others then
+  null; -- wysyłka spróbuje ponownie przy następnym uruchomieniu harmonogramu
+end $$;
+
+-- Dla funkcji Edge: weryfikacja sekretu bez ujawniania go w kodzie
+create or replace function public._check_cron_secret(p_secret text)
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (select 1 from vault.decrypted_secrets where name = 'klubowicz_cron_secret' and decrypted_secret = p_secret);
+$$;
+
+-- 1) Nowa prośba o dołączenie → e-mail do Właścicieli klubu
+create or replace function public._notify_new_member()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare
+  c record;
+  v_p public.profiles%rowtype;
+begin
+  if new.status <> 'pending' then return null; end if;
+  if tg_op = 'UPDATE' and old.status = 'pending' then return null; end if;
+  select * into v_p from public.profiles where id = new.user_id;
+  for c in
+    select p.id, p.email, cl.name as club_name, cl.id as club_id
+    from public.club_members m
+    join public.profiles p on p.id = m.user_id
+    join public.clubs cl on cl.id = m.club_id
+    where m.club_id = new.club_id and m.role = 'owner' and m.status = 'active'
+      and p.email is not null and p.email_notifications
+  loop
+    insert into public.notification_outbox (club_id, user_id, to_email, kind, payload)
+    values (c.club_id, c.id, c.email, 'new_member', jsonb_build_object(
+      'club_name', c.club_name,
+      'club_id', c.club_id,
+      'name', coalesce(nullif(v_p.full_name, ''), v_p.email),
+      'email', v_p.email,
+      'billing_mode', new.billing_mode,
+      'position', new.position
+    ));
+  end loop;
+  perform public._kick_mailer();
+  return null;
+end $$;
+
+drop trigger if exists club_members_notify_new on public.club_members;
+create trigger club_members_notify_new
+  after insert or update of status on public.club_members
+  for each row execute function public._notify_new_member();
+
+-- 2) Codzienne zestawienie nowych obciążeń
+create or replace function public._queue_charge_digests()
+returns integer language plpgsql volatile security definer set search_path = public as $$
+declare
+  r     record;
+  v_n   integer := 0;
+  v_now timestamptz := now();
+begin
+  for r in
+    select m.club_id, m.user_id, m.member_code, p.email, p.full_name, c.name as club_name,
+           c.bank_account, c.bank_recipient,
+           coalesce(s.last_charge_digest_at, v_now - interval '1 day') as since
+    from public.club_members m
+    join public.profiles p on p.id = m.user_id
+    join public.clubs c on c.id = m.club_id
+    left join public.notify_state s on s.club_id = m.club_id and s.user_id = m.user_id
+    where m.status = 'active' and p.email is not null and p.email_notifications
+  loop
+    if exists (select 1 from public.transactions t
+               where t.club_id = r.club_id and t.user_id = r.user_id and t.amount < 0
+                 and t.created_at > r.since and t.created_at <= v_now) then
+      insert into public.notification_outbox (club_id, user_id, to_email, kind, payload)
+      select r.club_id, r.user_id, r.email, 'charges', jsonb_build_object(
+        'club_name', r.club_name,
+        'club_id', r.club_id,
+        'name', r.full_name,
+        'items', (select jsonb_agg(jsonb_build_object('date', t.booked_at, 'description', t.description,
+                                                      'type', t.type, 'amount', -t.amount) order by t.booked_at, t.created_at)
+                  from public.transactions t
+                  where t.club_id = r.club_id and t.user_id = r.user_id and t.amount < 0
+                    and t.created_at > r.since and t.created_at <= v_now),
+        'balance', (select coalesce(sum(t.amount), 0) from public.transactions t
+                    where t.club_id = r.club_id and t.user_id = r.user_id),
+        'bank_account', r.bank_account,
+        'bank_recipient', r.bank_recipient,
+        'transfer_title', trim(coalesce(r.member_code, '') || ' ' || coalesce(r.full_name, '')) || ' - składka za wynajem sali gimnastycznej'
+      );
+      v_n := v_n + 1;
+    end if;
+    insert into public.notify_state (club_id, user_id, last_charge_digest_at)
+    values (r.club_id, r.user_id, v_now)
+    on conflict (club_id, user_id) do update set last_charge_digest_at = v_now;
+  end loop;
+  perform public._kick_mailer();
+  return v_n;
+end $$;
+
+-- 3) Przypomnienie o ujemnym saldzie (raz w tygodniu)
+create or replace function public._queue_debt_reminders()
+returns integer language plpgsql volatile security definer set search_path = public as $$
+declare
+  r     record;
+  v_n   integer := 0;
+  v_old date;
+begin
+  for r in
+    select m.club_id, m.user_id, m.member_code, p.email, p.full_name, c.name as club_name,
+           c.bank_account, c.bank_recipient,
+           (select coalesce(sum(t.amount), 0) from public.transactions t
+             where t.club_id = m.club_id and t.user_id = m.user_id) as balance
+    from public.club_members m
+    join public.profiles p on p.id = m.user_id
+    join public.clubs c on c.id = m.club_id
+    where m.status = 'active' and p.email is not null and p.email_notifications
+  loop
+    if r.balance < 0 then
+      select min(t.booked_at) into v_old
+      from public._paid_charges(r.club_id, r.user_id) pc
+      join public.transactions t on t.id = pc.tx_id
+      where not pc.paid;
+      insert into public.notification_outbox (club_id, user_id, to_email, kind, payload)
+      values (r.club_id, r.user_id, r.email, 'debt', jsonb_build_object(
+        'club_name', r.club_name,
+        'club_id', r.club_id,
+        'name', r.full_name,
+        'balance', r.balance,
+        'oldest_unpaid', v_old,
+        'days_overdue', case when v_old is not null then (current_date - v_old) end,
+        'bank_account', r.bank_account,
+        'bank_recipient', r.bank_recipient,
+        'transfer_title', trim(coalesce(r.member_code, '') || ' ' || coalesce(r.full_name, '')) || ' - składka za wynajem sali gimnastycznej'
+      ));
+      insert into public.notify_state (club_id, user_id, last_debt_reminder_at)
+      values (r.club_id, r.user_id, now())
+      on conflict (club_id, user_id) do update set last_debt_reminder_at = now();
+      v_n := v_n + 1;
+    end if;
+  end loop;
+  perform public._kick_mailer();
+  return v_n;
+end $$;
+
+revoke all on function public._kick_mailer() from public, anon, authenticated;
+revoke all on function public._check_cron_secret(text) from public, anon, authenticated;
+revoke all on function public._queue_charge_digests() from public, anon, authenticated;
+revoke all on function public._queue_debt_reminders() from public, anon, authenticated;
+revoke all on function public._notify_new_member() from public, anon, authenticated;
+grant execute on function public._check_cron_secret(text) to service_role;
+
+-- Harmonogram (UTC): zestawienie obciążeń codziennie 17:00 (18:00/19:00 PL),
+-- przypomnienie o saldzie w poniedziałki 16:00, ponawianie wysyłki co 10 minut
+do $$
+begin
+  perform cron.unschedule(jobid) from cron.job where jobname in ('klubowicz-charge-digest', 'klubowicz-debt-reminder', 'klubowicz-mailer');
+  perform cron.schedule('klubowicz-charge-digest', '0 17 * * *', 'select public._queue_charge_digests()');
+  perform cron.schedule('klubowicz-debt-reminder', '0 16 * * 1', 'select public._queue_debt_reminders()');
+  perform cron.schedule('klubowicz-mailer', '*/10 * * * *', 'select public._kick_mailer()');
+end $$;
+
 -- Harmonogram: 1. dnia miesiąca o 05:00 UTC (06:00 zimą / 07:00 latem w Polsce)
 do $$
 begin

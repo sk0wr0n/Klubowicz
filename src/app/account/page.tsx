@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { LogOut, Save, Shirt } from 'lucide-react';
+import { Bell, LogOut, Save, Shirt } from 'lucide-react';
 import { POSITION_LABEL, isPosition, type Position } from '@/lib/positions';
 import { PositionPicker } from '@/components/Position';
 import { useAuth, useRequireAuth } from '@/lib/auth';
@@ -76,6 +76,51 @@ function PositionsSection() {
           );
         })
       )}
+    </section>
+  );
+}
+
+function NotificationsSection() {
+  const { userId, profile, refreshProfile } = useAuth();
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  const on = profile?.email_notifications !== false;
+
+  async function toggle() {
+    setBusy(true);
+    const { error } = await supabase().from('profiles').update({ email_notifications: !on }).eq('id', userId!);
+    setBusy(false);
+    if (error) {
+      toast(errMsg(error), 'error');
+      return;
+    }
+    await refreshProfile();
+    toast(on ? 'Wyłączono powiadomienia e-mail.' : 'Włączono powiadomienia e-mail.');
+  }
+
+  return (
+    <section className="card mt-6">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="flex items-center gap-2 font-semibold">
+            <Bell className="h-5 w-5 text-indigo-600" /> Powiadomienia e-mail
+          </h2>
+          <p className="mt-1 text-xs text-slate-500">
+            Wieczorne zestawienie nowych obciążeń, przypomnienie w poniedziałek przy ujemnym saldzie, a dla Właściciela –
+            informacja o nowych osobach chcących dołączyć.
+          </p>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={on}
+          disabled={busy}
+          onClick={() => void toggle()}
+          className={`relative mt-1 h-7 w-12 shrink-0 rounded-full transition-colors ${on ? 'bg-indigo-600' : 'bg-slate-300'}`}
+        >
+          <span className={`absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-all ${on ? 'left-[22px]' : 'left-0.5'}`} />
+        </button>
+      </div>
     </section>
   );
 }
@@ -155,6 +200,7 @@ function AccountInner() {
         </form>
 
         {!first && <PositionsSection />}
+        {!first && <NotificationsSection />}
 
         {!first && (
           <button className="btn btn-secondary mt-6 w-full text-red-600" onClick={() => void signOut()}>
