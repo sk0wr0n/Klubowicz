@@ -9,12 +9,15 @@ import { formatDate, money } from '@/lib/format';
 import { ROLE_LABEL, type TeamMember, type Transaction } from '@/lib/types';
 import BalanceUpdateInfo from '@/components/BalanceUpdateInfo';
 import TransactionList from '@/components/TransactionList';
-import { PositionBadge } from '@/components/Position';
+import { PositionBadges, PositionMultiPicker } from '@/components/Position';
+import { isPosition } from '@/lib/positions';
+import { useToast } from '@/components/Toast';
 import { Avatar, EmptyState, ErrorBox, Modal, PageTitle, Spinner } from '@/components/ui';
 
 /** Cały zespół i stan kont – dla Opiekuna i Właściciela (tylko odczyt). */
 export default function TeamPage() {
-  const { clubId, isStaff, memberMap } = useClub();
+  const { clubId, isStaff, memberMap, reloadMembers } = useClub();
+  const toast = useToast();
   const [list, setList] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -99,7 +102,7 @@ export default function TeamPage() {
                         <span className={`chip ${m.billing_mode === 'monthly' ? 'bg-violet-100 text-violet-700' : 'bg-slate-100 text-slate-600'}`}>
                           {m.billing_mode === 'monthly' ? 'składka mies.' : 'za trening'}
                         </span>
-                        <PositionBadge position={memberMap[m.user_id]?.position} full />
+                        <PositionBadges positions={memberMap[m.user_id]?.positions} primary={memberMap[m.user_id]?.position} />
                         {m.role !== 'member' && <span className="chip bg-sky-100 text-sky-700">{ROLE_LABEL[m.role]}</span>}
                         {m.last_present_at && <span>ost. obecność {formatDate(m.last_present_at)}</span>}
                       </span>
@@ -133,6 +136,28 @@ export default function TeamPage() {
                 </p>
                 <p className="text-slate-500">ostatnia wpłata</p>
               </div>
+            </div>
+            <div className="mb-3">
+              <p className="label">Pozycje na boisku</p>
+              <PositionMultiPicker
+                value={(
+                  (memberMap[selected.user_id]?.positions?.length
+                    ? memberMap[selected.user_id]?.positions
+                    : memberMap[selected.user_id]?.position
+                      ? [memberMap[selected.user_id]!.position as string]
+                      : []) ?? []
+                ).filter(isPosition)}
+                onChange={(v) =>
+                  void (async () => {
+                    const { error } = await supabase().rpc('set_member_positions', {
+                      p_member_id: selected.member_id,
+                      p_positions: v,
+                    });
+                    if (error) toast(errMsg(error), 'error');
+                    else await reloadMembers();
+                  })()
+                }
+              />
             </div>
             <p className="mb-1 text-xs text-slate-500">
               {selected.member_code} · {selected.billing_mode === 'monthly' ? 'składka miesięczna (wynajem sali)' : 'płatność za trening'}

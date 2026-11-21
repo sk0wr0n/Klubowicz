@@ -85,6 +85,7 @@ export interface ClubMemberRow {
   billing_mode: BillingMode;
   member_code: string | null;
   position?: string | null;
+  positions?: string[] | null;
   profiles: { full_name: string | null; avatar_url: string | null } | null;
 }
 
@@ -117,6 +118,7 @@ export interface Signup {
   wants_beer: boolean;
   added_by_staff: boolean;
   signed_up_at: string;
+  position?: string | null;
 }
 
 export interface Attendance {

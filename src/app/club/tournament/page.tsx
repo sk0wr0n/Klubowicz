@@ -25,7 +25,7 @@ import { formatDate, formatDateRange, money } from '@/lib/format';
 import { clubHref } from '@/lib/nav';
 import type { Tournament, TournamentParticipant } from '@/lib/types';
 import MemberPicker from '@/components/MemberPicker';
-import { PositionBadge, PositionSummary } from '@/components/Position';
+import { EventPositionModal, PositionBadge, PositionSummary } from '@/components/Position';
 import { deadlineLabel } from '@/components/TournamentCard';
 import TournamentFormModal from '@/components/TournamentFormModal';
 import { useToast } from '@/components/Toast';
@@ -36,6 +36,7 @@ type Confirm = 'close' | 'reopen' | 'delete' | 'leave' | null;
 interface Avail {
   days: string[] | null;
   note: string | null;
+  position: string | null;
 }
 
 function tournamentDays(from: string, to: string | null): string[] {
@@ -103,6 +104,8 @@ export default function TournamentPage() {
   const [avail, setAvail] = useState<Record<string, Avail>>({});
   const [myDays, setMyDays] = useState<Set<string>>(new Set());
   const [myNote, setMyNote] = useState('');
+  const [posEdit, setPosEdit] = useState<string | null>(null);
+  const [posBusy, setPosBusy] = useState(false);
 
   const load = useCallback(async () => {
     if (!tId) return;
@@ -110,11 +113,11 @@ export default function TournamentPage() {
     const [a, b, c] = await Promise.all([
       sb.from('tournaments').select('*').eq('id', tId).eq('club_id', clubId).maybeSingle(),
       sb.rpc('tournament_participants', { p_tournament: tId }),
-      sb.from('tournament_signups').select('user_id, days, note').eq('tournament_id', tId),
+      sb.from('tournament_signups').select('user_id, days, note, position').eq('tournament_id', tId),
     ]);
     const av: Record<string, Avail> = {};
-    for (const r of (c.data ?? []) as { user_id: string; days: string[] | null; note: string | null }[]) {
-      av[r.user_id] = { days: r.days, note: r.note };
+    for (const r of (c.data ?? []) as { user_id: string; days: string[] | null; note: string | null; position: string | null }[]) {
+      av[r.user_id] = { days: r.days, note: r.note, position: r.position };
     }
     setAvail(av);
     if (a.error) toast(errMsg(a.error), 'error');
@@ -150,7 +153,11 @@ export default function TournamentPage() {
   const closed = t?.status === 'closed';
   const fee = t?.entry_fee != null ? Number(t.entry_fee) : null;
   const share = fee != null && count > 0 ? Math.round((fee / count) * 100) / 100 : null;
-  const positions = useMemo(() => people.map((p) => memberMap[p.user_id]?.position), [people, memberMap]);
+  const effPos = (uid: string) => avail[uid]?.position ?? memberMap[uid]?.position ?? null;
+  const positions = useMemo(
+    () => people.map((p) => avail[p.user_id]?.position ?? memberMap[p.user_id]?.position),
+    [people, memberMap, avail]
+  );
   const anyCharges = people.some((p) => p.fee_paid !== null || p.extras_paid !== null);
 
   async function rpc(fn: string, args: Record<string, unknown>, ok?: string): Promise<unknown> {
@@ -371,7 +378,12 @@ export default function TournamentPage() {
             <button
               className="btn btn-primary py-3"
               disabled={busy}
-              onClick={() => void run(() => rpc('join_tournament', { p_tournament: tId }, 'Zapisano na turniej!'))}
+              onClick={() =>
+                void run(async () => {
+                  await rpc('join_tournament', { p_tournament: tId }, 'Zapisano na turniej!');
+                  if (userId && (memberMap[userId]?.positions?.length ?? 0) > 1) setPosEdit(userId);
+                })
+              }
             >
               <UserPlus className="h-4 w-4" /> Zapisz się na turniej
             </button>
@@ -490,7 +502,22 @@ export default function TournamentPage() {
                         )}
                       </div>
                     </div>
-                    <PositionBadge position={m?.position} />
+                    {p.user_id === userId || isStaff ? (
+                      <button
+                        type="button"
+                        className="shrink-0 rounded-lg"
+                        aria-label="Zmień pozycję na turnieju"
+                        onClick={() => setPosEdit(p.user_id)}
+                      >
+                        {effPos(p.user_id) ? (
+                          <PositionBadge position={effPos(p.user_id)} />
+                        ) : (
+                          <span className="chip border border-dashed border-slate-300 text-slate-400">+ poz.</span>
+                        )}
+                      </button>
+                    ) : (
+                      <PositionBadge position={effPos(p.user_id)} />
+                    )}
                     {isStaff && (
                       <button
                         className="rounded-lg p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600"
@@ -544,6 +571,33 @@ export default function TournamentPage() {
         </p>
       </div>
 
+      <EventPositionModal
+        open={posEdit !== null}
+        title="Pozycja na tym turnieju"
+        personName={posEdit && posEdit !== userId ? nameOf(posEdit) : undefined}
+        memberPositions={posEdit ? memberMap[posEdit]?.positions ?? [] : []}
+        current={posEdit ? effPos(posEdit) : null}
+        busy={posBusy}
+        onPick={(pos) =>
+          void (async () => {
+            if (!posEdit) return;
+            setPosBusy(true);
+            const { error } = await supabase().rpc('set_tournament_signup_position', {
+              p_tournament: tId,
+              p_user: posEdit === userId ? null : posEdit,
+              p_position: pos,
+            });
+            setPosBusy(false);
+            if (error) {
+              toast(errMsg(error), 'error');
+              return;
+            }
+            setPosEdit(null);
+            await load();
+          })()
+        }
+        onClose={() => setPosEdit(null)}
+      />
       <TournamentFormModal open={editOpen} onClose={() => setEditOpen(false)} onSaved={() => void load()} tournament={t} />
 
       <MemberPicker

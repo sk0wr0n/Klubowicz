@@ -3092,6 +3092,152 @@ end $$;
 revoke all on function public.set_club_logo(uuid, text) from public, anon;
 grant execute on function public.set_club_logo(uuid, text) to authenticated;
 
+-- Wiele pozycji zawodnika + pozycja wybrana na konkretny trening / turniej
+alter table public.club_members add column if not exists positions text[] not null default '{}';
+alter table public.club_members drop constraint if exists club_members_positions_check;
+alter table public.club_members add constraint club_members_positions_check
+  check (positions <@ array['setter', 'outside', 'opposite', 'middle', 'libero']::text[]);
+update public.club_members set positions = array[position] where position is not null and positions = '{}';
+grant select (positions) on public.club_members to authenticated;
+
+alter table public.training_signups add column if not exists position text
+  check (position is null or position in ('setter', 'outside', 'opposite', 'middle', 'libero'));
+alter table public.tournament_signups add column if not exists position text
+  check (position is null or position in ('setter', 'outside', 'opposite', 'middle', 'libero'));
+
+create or replace function public._clean_positions(p text[])
+returns text[] language sql immutable set search_path = public as $$
+  select coalesce(array_agg(x order by ord), '{}')
+  from (select distinct on (x) x, ord from unnest(coalesce(p, '{}')) with ordinality as u(x, ord)
+        where x in ('setter', 'outside', 'opposite', 'middle', 'libero') order by x, ord) d;
+$$;
+
+-- Zawodnik ustawia swoje pozycje (pierwsza = główna)
+create or replace function public.set_my_positions(p_club uuid, p_positions text[])
+returns void language plpgsql volatile security definer set search_path = public as $$
+declare
+  v_uid uuid := public._require_uid();
+  v_pos text[] := public._clean_positions(p_positions);
+begin
+  update public.club_members set positions = v_pos, position = v_pos[1]
+  where club_id = p_club and user_id = v_uid and status in ('active', 'pending');
+  if not found then raise exception 'Nie jesteś członkiem tego klubu.' using errcode = '42501'; end if;
+end $$;
+
+-- Opiekun / Skarbnik / Właściciel ustawia pozycje członka
+create or replace function public.set_member_positions(p_member_id uuid, p_positions text[])
+returns void language plpgsql volatile security definer set search_path = public as $$
+declare
+  v_club uuid;
+  v_pos text[] := public._clean_positions(p_positions);
+begin
+  select club_id into v_club from public.club_members where id = p_member_id;
+  if v_club is null then raise exception 'Nie znaleziono członka.'; end if;
+  perform public._require_staff(v_club);
+  update public.club_members set positions = v_pos, position = v_pos[1] where id = p_member_id;
+end $$;
+
+-- zgodność wstecz: pojedyncza pozycja = ustaw jako główną (pozostałe zostają)
+create or replace function public.set_my_position(p_club uuid, p_position text)
+returns void language plpgsql volatile security definer set search_path = public as $$
+declare
+  v_uid uuid := public._require_uid();
+  v_cur text[];
+begin
+  select positions into v_cur from public.club_members
+  where club_id = p_club and user_id = v_uid and status in ('active', 'pending');
+  if not found then raise exception 'Nie jesteś członkiem tego klubu.' using errcode = '42501'; end if;
+  perform public.set_my_positions(p_club, case when p_position is null then '{}'::text[]
+                                               else array[p_position] || array_remove(v_cur, p_position) end);
+end $$;
+
+create or replace function public.set_member_position(p_member_id uuid, p_position text)
+returns void language plpgsql volatile security definer set search_path = public as $$
+declare v_cur text[];
+begin
+  select positions into v_cur from public.club_members where id = p_member_id;
+  perform public.set_member_positions(p_member_id, case when p_position is null then '{}'::text[]
+                                                        else array[p_position] || array_remove(v_cur, p_position) end);
+end $$;
+
+-- przy dołączaniu: pozycja z rejestracji trafia też do listy pozycji
+create or replace function public._sync_member_positions()
+returns trigger language plpgsql set search_path = public as $$
+begin
+  if new.position is not null and not (new.position = any (new.positions)) then
+    new.positions := array[new.position] || new.positions;
+  end if;
+  return new;
+end $$;
+drop trigger if exists club_members_sync_positions on public.club_members;
+create trigger club_members_sync_positions
+  before insert or update of position on public.club_members
+  for each row execute function public._sync_member_positions();
+
+-- Pozycja na konkretny trening (sam zawodnik albo Opiekun/Skarbnik/Właściciel)
+create or replace function public.set_signup_position(p_training uuid, p_user uuid, p_position text)
+returns void language plpgsql volatile security definer set search_path = public as $$
+declare
+  v_uid  uuid := public._require_uid();
+  v_club uuid;
+begin
+  select club_id into v_club from public.trainings where id = p_training;
+  if v_club is null then raise exception 'Trening nie istnieje.'; end if;
+  if coalesce(p_user, v_uid) <> v_uid then
+    perform public._require_staff(v_club);
+  elsif not public.is_club_member(v_club) then
+    raise exception 'Nie jesteś aktywnym członkiem tego klubu.' using errcode = '42501';
+  end if;
+  if p_position is not null and p_position not in ('setter', 'outside', 'opposite', 'middle', 'libero') then
+    raise exception 'Nieprawidłowa pozycja.';
+  end if;
+  update public.training_signups set position = p_position, updated_at = now()
+  where training_id = p_training and user_id = coalesce(p_user, v_uid);
+  if not found then raise exception 'Ta osoba nie jest zapisana na trening.'; end if;
+end $$;
+
+create or replace function public.set_tournament_signup_position(p_tournament uuid, p_user uuid, p_position text)
+returns void language plpgsql volatile security definer set search_path = public as $$
+declare
+  v_uid  uuid := public._require_uid();
+  v_club uuid;
+begin
+  select club_id into v_club from public.tournaments where id = p_tournament;
+  if v_club is null then raise exception 'Turniej nie istnieje.'; end if;
+  if coalesce(p_user, v_uid) <> v_uid then
+    perform public._require_staff(v_club);
+  elsif not public.is_club_member(v_club) then
+    raise exception 'Nie jesteś aktywnym członkiem tego klubu.' using errcode = '42501';
+  end if;
+  if p_position is not null and p_position not in ('setter', 'outside', 'opposite', 'middle', 'libero') then
+    raise exception 'Nieprawidłowa pozycja.';
+  end if;
+  update public.tournament_signups set position = p_position
+  where tournament_id = p_tournament and user_id = coalesce(p_user, v_uid);
+  if not found then raise exception 'Ta osoba nie jest zapisana na turniej.'; end if;
+end $$;
+
+revoke all on function public._clean_positions(text[]) from public, anon, authenticated;
+revoke all on function public._sync_member_positions() from public, anon, authenticated;
+revoke all on function public.set_my_positions(uuid, text[]) from public, anon;
+revoke all on function public.set_member_positions(uuid, text[]) from public, anon;
+revoke all on function public.set_signup_position(uuid, uuid, text) from public, anon;
+revoke all on function public.set_tournament_signup_position(uuid, uuid, text) from public, anon;
+grant execute on function public.set_my_positions(uuid, text[]) to authenticated;
+grant execute on function public.set_member_positions(uuid, text[]) to authenticated;
+grant execute on function public.set_signup_position(uuid, uuid, text) to authenticated;
+grant execute on function public.set_tournament_signup_position(uuid, uuid, text) to authenticated;
+
+create or replace function public._require_staff(p_club uuid)
+returns uuid language plpgsql stable security definer set search_path = public as $$
+declare v uuid := public._require_uid();
+begin
+  if not public.is_club_staff(p_club) then
+    raise exception 'Tę operację może wykonać tylko Opiekun, Skarbnik lub Właściciel klubu.' using errcode = '42501';
+  end if;
+  return v;
+end $$;
+
 -- Harmonogram: 1. dnia miesiąca o 05:00 UTC (06:00 zimą / 07:00 latem w Polsce)
 do $$
 begin

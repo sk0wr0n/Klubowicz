@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Bell, LogOut, Save, Shirt } from 'lucide-react';
 import { POSITION_LABEL, isPosition, type Position } from '@/lib/positions';
-import { PositionPicker } from '@/components/Position';
+import { PositionMultiPicker } from '@/components/Position';
 import { useAuth, useRequireAuth } from '@/lib/auth';
 import { errMsg, supabase } from '@/lib/supabase';
 import AppHeader from '@/components/AppHeader';
@@ -16,8 +16,8 @@ function PositionsSection() {
   const { userId, memberships } = useAuth();
   const toast = useToast();
   const clubs = memberships.filter((m) => m.status === 'active');
-  const [values, setValues] = useState<Record<string, Position | null>>({});
-  const [saved, setSaved] = useState<Record<string, Position | null>>({});
+  const [values, setValues] = useState<Record<string, Position[]>>({});
+  const [saved, setSaved] = useState<Record<string, Position[]>>({});
   const [busy, setBusy] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
 
@@ -25,12 +25,13 @@ function PositionsSection() {
     if (!userId) return;
     void supabase()
       .from('club_members')
-      .select('club_id, position')
+      .select('club_id, position, positions')
       .eq('user_id', userId)
       .then(({ data }) => {
-        const map: Record<string, Position | null> = {};
-        for (const r of (data ?? []) as { club_id: string; position: string | null }[]) {
-          map[r.club_id] = isPosition(r.position) ? r.position : null;
+        const map: Record<string, Position[]> = {};
+        for (const r of (data ?? []) as { club_id: string; position: string | null; positions: string[] | null }[]) {
+          const list = r.positions?.length ? r.positions : r.position ? [r.position] : [];
+          map[r.club_id] = list.filter(isPosition);
         }
         setValues(map);
         setSaved(map);
@@ -41,37 +42,37 @@ function PositionsSection() {
   if (clubs.length === 0) return null;
 
   async function save(clubId: string) {
-    const v = values[clubId];
-    if (!v) return;
+    const v = values[clubId] ?? [];
+    if (!v.length) return;
     setBusy(clubId);
-    const { error } = await supabase().rpc('set_my_position', { p_club: clubId, p_position: v });
+    const { error } = await supabase().rpc('set_my_positions', { p_club: clubId, p_positions: v });
     setBusy(null);
     if (error) {
       toast(errMsg(error), 'error');
       return;
     }
     setSaved((s) => ({ ...s, [clubId]: v }));
-    toast(`Zapisano pozycję: ${POSITION_LABEL[v]}.`);
+    toast(`Zapisano: ${v.map((p) => POSITION_LABEL[p]).join(', ')}.`);
   }
 
   return (
     <section className="card mt-6 flex flex-col gap-4">
       <h2 className="flex items-center gap-2 font-semibold">
-        <Shirt className="h-5 w-5 text-indigo-600" /> Pozycja na boisku
+        <Shirt className="h-5 w-5 text-indigo-600" /> Pozycje na boisku
       </h2>
       {!loaded ? (
         <Spinner className="h-5 w-5 text-slate-400" />
       ) : (
         clubs.map((c) => {
-          const v = values[c.club_id] ?? null;
-          const changed = v !== (saved[c.club_id] ?? null);
+          const v = values[c.club_id] ?? [];
+          const changed = v.join(',') !== (saved[c.club_id] ?? []).join(',');
           return (
             <div key={c.club_id} className="flex flex-col gap-2">
               {clubs.length > 1 && <p className="text-sm font-medium text-slate-600">{c.club_name}</p>}
-              <PositionPicker value={v} onChange={(p) => setValues((s) => ({ ...s, [c.club_id]: p }))} />
-              <button className="btn btn-primary" disabled={!v || !changed || busy !== null} onClick={() => void save(c.club_id)}>
+              <PositionMultiPicker value={v} onChange={(p) => setValues((s) => ({ ...s, [c.club_id]: p }))} />
+              <button className="btn btn-primary" disabled={!v.length || !changed || busy !== null} onClick={() => void save(c.club_id)}>
                 {busy === c.club_id ? <Spinner className="h-4 w-4" /> : <Save className="h-4 w-4" />}{' '}
-                {!v ? 'Wybierz pozycję' : changed ? 'Zapisz pozycję' : 'Pozycja zapisana'}
+                {!v.length ? 'Wybierz pozycję' : changed ? 'Zapisz pozycje' : 'Pozycje zapisane'}
               </button>
             </div>
           );

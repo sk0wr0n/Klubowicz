@@ -9,7 +9,7 @@ import { clubHref, setLastClub, setNext } from '@/lib/nav';
 import { money } from '@/lib/format';
 import type { BillingMode } from '@/lib/types';
 import { ErrorBox, FullScreenLoader, Spinner } from '@/components/ui';
-import { PositionPicker } from '@/components/Position';
+import { PositionMultiPicker } from '@/components/Position';
 import type { Position } from '@/lib/positions';
 
 /** Odczyt kodu z /join/KOD (przez .htaccess / _redirects) lub /join/?code=KOD */
@@ -33,7 +33,8 @@ export default function JoinPage() {
   const [code, setCode] = useState<string | null>(null);
   const [info, setInfo] = useState<InviteInfo | null>(null);
   const [mode, setMode] = useState<BillingMode | null>(null);
-  const [position, setPosition] = useState<Position | null>(null);
+  const [positions, setPositions] = useState<Position[]>([]);
+  const position = positions[0] ?? null;
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<{ club_id: string; club_name: string; status: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -82,6 +83,9 @@ export default function JoinPage() {
       return;
     }
     const row = (Array.isArray(data) ? data[0] : data) as { club_id: string; club_name: string; status: string };
+    if (positions.length > 1) {
+      await supabase().rpc('set_my_positions', { p_club: row.club_id, p_positions: positions });
+    }
     setResult(row);
     await refreshMemberships();
   }
@@ -218,8 +222,8 @@ export default function JoinPage() {
       </div>
 
       <div className="flex flex-col gap-3">
-        <p className="text-sm font-semibold text-slate-700">Na jakiej pozycji grasz?</p>
-        <PositionPicker value={position} onChange={setPosition} />
+        <p className="text-sm font-semibold text-slate-700">Na jakich pozycjach grasz?</p>
+        <PositionMultiPicker value={positions} onChange={setPositions} />
       </div>
 
       <button className="btn btn-primary py-3" disabled={!mode || !position || busy} onClick={() => void join()}>

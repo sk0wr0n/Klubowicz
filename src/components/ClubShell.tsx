@@ -45,7 +45,7 @@ export default function ClubShell({ children }: { children: ReactNode }) {
     if (!clubId) return;
     const { data } = await supabase()
       .from('club_members')
-      .select('id, user_id, role, status, billing_mode, member_code, position, profiles(full_name, avatar_url)')
+      .select('id, user_id, role, status, billing_mode, member_code, position, positions, profiles(full_name, avatar_url)')
       .eq('club_id', clubId)
       .eq('status', 'active');
     const rows = ((data ?? []) as unknown as ClubMemberRow[]).sort((a, b) =>

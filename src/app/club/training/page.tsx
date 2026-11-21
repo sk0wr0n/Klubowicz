@@ -25,7 +25,7 @@ import { clubHref } from '@/lib/nav';
 import type { Attendance, Signup, Training } from '@/lib/types';
 import CoachVote from '@/components/CoachVote';
 import MemberPicker from '@/components/MemberPicker';
-import { PositionBadge, PositionSummary } from '@/components/Position';
+import { EventPositionModal, PositionBadge, PositionSummary } from '@/components/Position';
 import TrainingFormModal from '@/components/TrainingFormModal';
 import { StatusBadge } from '@/components/TrainingCard';
 import { useToast } from '@/components/Toast';
@@ -52,6 +52,8 @@ export default function TrainingPage() {
   const [attMode, setAttMode] = useState(false);
   const [voteOpen, setVoteOpen] = useState(false);
   const [mvpOpen, setMvpOpen] = useState(false);
+  const [posEdit, setPosEdit] = useState<{ uid: string; afterJoin?: boolean } | null>(null);
+  const [posBusy, setPosBusy] = useState(false);
   const [present, setPresent] = useState<Set<string>>(new Set());
   const [chargeLate, setChargeLate] = useState<Set<string>>(new Set());
 
@@ -62,7 +64,7 @@ export default function TrainingPage() {
       sb.from('trainings').select('*').eq('id', tId).eq('club_id', clubId).maybeSingle(),
       sb
         .from('training_signups')
-        .select('id, training_id, user_id, status, has_car, wants_beer, added_by_staff, signed_up_at')
+        .select('id, training_id, user_id, status, has_car, wants_beer, added_by_staff, signed_up_at, position')
         .eq('training_id', tId)
         .order('signed_up_at'),
       sb.from('training_attendance').select('user_id, present').eq('training_id', tId),
@@ -144,7 +146,9 @@ export default function TrainingPage() {
       if (res === 'main') toast('Zapisano! Jesteś na liście głównej.');
       else toast('Lista jest pełna – jesteś na liście rezerwowej. Awansujesz automatycznie, gdy zwolni się miejsce.', 'info');
       await load();
-      setVoteOpen(true);
+      const myPos = userId ? memberMap[userId]?.positions ?? [] : [];
+      if (userId && myPos.length > 1) setPosEdit({ uid: userId, afterJoin: true });
+      else setVoteOpen(true);
     } catch {
       /* komunikat pokazany */
     }
@@ -251,6 +255,27 @@ export default function TrainingPage() {
     router.replace(clubHref(clubId));
   }
 
+  const effPos = (uid: string) => signups.find((x) => x.user_id === uid)?.position ?? memberMap[uid]?.position ?? null;
+
+  async function savePosition(p: string) {
+    if (!posEdit) return;
+    setPosBusy(true);
+    const { error } = await supabase().rpc('set_signup_position', {
+      p_training: tId,
+      p_user: posEdit.uid === userId ? null : posEdit.uid,
+      p_position: p,
+    });
+    setPosBusy(false);
+    if (error) {
+      toast(errMsg(error), 'error');
+      return;
+    }
+    const after = posEdit.afterJoin;
+    setPosEdit(null);
+    await load();
+    if (after) setVoteOpen(true);
+  }
+
   function PersonRow({ s, index, right }: { s: Signup; index?: number; right?: ReactNode }) {
     const m = memberMap[s.user_id];
     return (
@@ -264,7 +289,22 @@ export default function TrainingPage() {
           </p>
           {s.added_by_staff && <p className="text-[11px] text-slate-400">dopisany przez opiekuna</p>}
         </div>
-        <PositionBadge position={m?.position} />
+        {(s.user_id === userId || isStaff) && training?.status === 'scheduled' ? (
+          <button
+            type="button"
+            className="shrink-0 rounded-lg"
+            aria-label="Zmień pozycję na tym treningu"
+            onClick={() => setPosEdit({ uid: s.user_id })}
+          >
+            {s.position ?? m?.position ? (
+              <PositionBadge position={s.position ?? m?.position} />
+            ) : (
+              <span className="chip border border-dashed border-slate-300 text-slate-400">+ poz.</span>
+            )}
+          </button>
+        ) : (
+          <PositionBadge position={s.position ?? m?.position} />
+        )}
         {s.has_car && <Car className="h-4 w-4 text-sky-600" aria-label="Będę autem" />}
         {s.wants_beer && <Beer className="h-4 w-4 text-amber-500" aria-label="Integracja po treningu" />}
         {right}
@@ -448,7 +488,7 @@ export default function TrainingPage() {
             </button>
           </div>
           <div className="mb-2">
-            <PositionSummary positions={[...present].map((u) => memberMap[u]?.position)} />
+            <PositionSummary positions={[...present].map((u) => effPos(u))} />
           </div>
           <p className="mb-3 text-xs text-slate-500">
             Zaznacz osoby faktycznie obecne. Odznacz nieobecnych. Osoby, które przyszły, ale nie zapisały się w aplikacji,
@@ -534,7 +574,7 @@ export default function TrainingPage() {
             </div>
             {main.length > 0 && (
               <div className="mb-2 mt-1">
-                <PositionSummary positions={main.map((s) => memberMap[s.user_id]?.position)} />
+                <PositionSummary positions={main.map((s) => s.position ?? memberMap[s.user_id]?.position)} />
               </div>
             )}
             {main.length === 0 ? (
@@ -760,6 +800,20 @@ export default function TrainingPage() {
         onPick={(uid) => void staffAdd(uid)}
         excludeIds={signups.filter((s) => s.status !== 'late_cancel').map((s) => s.user_id)}
         title={picker === 'attendance' ? 'Dodaj obecną osobę (niezapisaną w apce)' : 'Dopisz osobę do treningu'}
+      />
+      <EventPositionModal
+        open={posEdit !== null}
+        title={posEdit?.afterJoin ? 'Na jakiej pozycji grasz na tym treningu?' : 'Pozycja na tym treningu'}
+        personName={posEdit && posEdit.uid !== userId ? nameOf(posEdit.uid) : undefined}
+        memberPositions={posEdit ? memberMap[posEdit.uid]?.positions ?? [] : []}
+        current={posEdit ? effPos(posEdit.uid) : null}
+        busy={posBusy}
+        onPick={(p) => void savePosition(p)}
+        onClose={() => {
+          const after = posEdit?.afterJoin;
+          setPosEdit(null);
+          if (after) setVoteOpen(true);
+        }}
       />
       <TrainingFormModal open={editOpen} onClose={() => setEditOpen(false)} onSaved={() => void load()} training={training} />
     </>
