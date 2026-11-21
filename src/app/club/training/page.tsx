@@ -99,6 +99,7 @@ export default function TrainingPage() {
   const mine = signups.find((s) => s.user_id === userId);
   const fee = Number(ctx.club.single_training_fee_amount);
   const deadline = ctx.club.cancellation_deadline_hours;
+  const lateFeeOn = ctx.club.late_cancel_fee_enabled !== false;
 
   if (loading) {
     return (
@@ -121,7 +122,7 @@ export default function TrainingPage() {
   const open = training.status === 'scheduled' && !started && !suspended;
   const afterDeadline = hoursUntil(training.starts_at) < deadline;
   const isPerSession = ctx.my_billing_mode === 'per_session';
-  const lateLeave = mine?.status === 'main' && isPerSession && afterDeadline;
+  const lateLeave = lateFeeOn && mine?.status === 'main' && isPerSession && afterDeadline;
   const cars = main.filter((s) => s.has_car).length;
   const beers = main.filter((s) => s.wants_beer).length;
 
@@ -381,7 +382,8 @@ export default function TrainingPage() {
             {open && isPerSession && fee > 0 && (
               <p className="rounded-lg bg-indigo-50 px-3 py-2 text-xs text-indigo-800">
                 💳 Opłata <strong>{money(fee)}</strong> zostanie naliczona <strong>po treningu</strong>, gdy Opiekun potwierdzi
-                obecność – nie w momencie zapisu. Wypisanie się do {deadline} h przed treningiem jest bezpłatne.
+                obecność – nie w momencie zapisu.
+                {lateFeeOn && ` Wypisanie się do ${deadline} h przed treningiem jest bezpłatne.`}
               </p>
             )}
             {open && !isPerSession && (
@@ -480,7 +482,7 @@ export default function TrainingPage() {
                       s={s}
                       right={
                         <span className="flex items-center gap-3">
-                          {ps && !present.has(s.user_id) && (
+                          {lateFeeOn && ps && !present.has(s.user_id) && (
                             <label className="flex items-center gap-1 text-xs text-slate-600">
                               <input
                                 type="checkbox"
@@ -631,7 +633,7 @@ export default function TrainingPage() {
             <strong>{money(fee)}</strong>.
             <p className="mt-2">
               Opłata nalicza się <strong>po treningu</strong>, gdy Opiekun potwierdzi obecność – teraz saldo się nie zmieni.
-              Wypisanie się do {deadline} h przed treningiem jest bezpłatne.
+              {lateFeeOn && ` Wypisanie się do ${deadline} h przed treningiem jest bezpłatne.`}
             </p>
             {main.length >= training.max_participants && (
               <p className="mt-2 text-amber-700">

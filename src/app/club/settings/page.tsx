@@ -21,6 +21,19 @@ export default function SettingsPage() {
   const [max, setMax] = useState(String(c.default_max_participants));
   const [location, setLocation] = useState(c.default_location ?? '');
   const [busy, setBusy] = useState(false);
+  const lateOn = c.late_cancel_fee_enabled !== false;
+  const [lateBusy, setLateBusy] = useState(false);
+
+  async function toggleLate() {
+    setLateBusy(true);
+    const { error } = await supabase().rpc('set_late_cancel_fee', { p_club: clubId, p_enabled: !lateOn });
+    setLateBusy(false);
+    if (error) toast(errMsg(error), 'error');
+    else {
+      toast(lateOn ? 'Wyłączono opłatę za późne wypisanie.' : 'Włączono opłatę za późne wypisanie.');
+      await reload();
+    }
+  }
 
   useEffect(() => {
     setName(c.name);
@@ -94,13 +107,35 @@ export default function SettingsPage() {
               <input className="input" inputMode="decimal" value={single} onChange={(e) => setSingle(e.target.value)} />
             </div>
           </div>
-          <div>
-            <label className="label">Termin bezpłatnego wypisania (godziny przed treningiem)</label>
-            <input className="input" type="number" min={0} max={336} value={deadline} onChange={(e) => setDeadline(e.target.value)} />
-            <p className="mt-1 text-xs text-slate-500">
-              Gracz w trybie „za trening”, który wypisze się później, trafia na listę „wypisani po terminie”, a Opiekun
-              przy rozliczeniu decyduje o naliczeniu opłaty.
-            </p>
+          <div className="rounded-xl border border-slate-200 p-3">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold">Opłata za późne wypisanie</p>
+                <p className="mt-0.5 text-xs text-slate-500">
+                  {lateOn
+                    ? 'Włączona – kto wypisze się za późno, trafia na listę „wypisani po terminie”, a Opiekun może naliczyć opłatę.'
+                    : 'Wyłączona – wypisanie zawsze bezpłatne. Płacą tylko osoby, którym Opiekun potwierdzi obecność.'}
+                </p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={lateOn}
+                disabled={lateBusy}
+                onClick={() => void toggleLate()}
+                className={`relative h-7 w-12 shrink-0 rounded-full transition-colors ${lateOn ? 'bg-indigo-600' : 'bg-slate-300'}`}
+              >
+                <span
+                  className={`absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-all ${lateOn ? 'left-[22px]' : 'left-0.5'}`}
+                />
+              </button>
+            </div>
+            {lateOn && (
+              <div className="mt-3">
+                <label className="label">Termin bezpłatnego wypisania (godziny przed treningiem)</label>
+                <input className="input" type="number" min={0} max={336} value={deadline} onChange={(e) => setDeadline(e.target.value)} />
+              </div>
+            )}
           </div>
         </div>
 

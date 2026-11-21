@@ -55,6 +55,8 @@ create table if not exists public.clubs (
 
 -- Automatyczne naliczanie składek miesięcznych (1. dnia miesiąca, harmonogram pg_cron)
 alter table public.clubs add column if not exists auto_monthly_fee boolean not null default false;
+-- Opłata za późne wypisanie z treningu (można wyłączyć – wtedy wypisanie zawsze bezpłatne)
+alter table public.clubs add column if not exists late_cancel_fee_enabled boolean not null default true;
 alter table public.clubs add column if not exists auto_monthly_fee_from text
   check (auto_monthly_fee_from is null or auto_monthly_fee_from ~ '^[0-9]{4}-(0[1-9]|1[0-2])$');
 
@@ -828,6 +830,7 @@ begin
       'monthly_fee_amount', v_club.monthly_fee_amount,
       'single_training_fee_amount', v_club.single_training_fee_amount,
       'cancellation_deadline_hours', v_club.cancellation_deadline_hours,
+      'late_cancel_fee_enabled', v_club.late_cancel_fee_enabled,
       'default_max_participants', v_club.default_max_participants,
       'default_location', v_club.default_location
     ),
@@ -1145,6 +1148,20 @@ begin
     order by count(*) desc;
 end $$;
 
+-- Właściciel włącza/wyłącza opłatę za późne wypisanie
+create or replace function public.set_late_cancel_fee(p_club uuid, p_enabled boolean)
+returns void language plpgsql volatile security definer set search_path = public as $$
+begin
+  perform public._require_owner(p_club);
+  update public.clubs set late_cancel_fee_enabled = coalesce(p_enabled, true) where id = p_club;
+  if not coalesce(p_enabled, true) then
+    -- dotychczasowe „wypisane po terminie” w nadchodzących treningach – zwykłe wypisanie
+    delete from public.training_signups s
+    using public.trainings t
+    where t.id = s.training_id and t.club_id = p_club and t.status = 'scheduled' and s.status = 'late_cancel';
+  end if;
+end $$;
+
 -- ---------- Treningi: zapisy ----------
 
 create or replace function public.join_training(p_training uuid)
@@ -1212,10 +1229,11 @@ begin
     return 'none';
   end if;
 
-  select c.cancellation_deadline_hours into v_deadline from public.clubs c where c.id = t.club_id;
+  select case when c.late_cancel_fee_enabled then c.cancellation_deadline_hours else null end
+    into v_deadline from public.clubs c where c.id = t.club_id;
   select m.billing_mode into v_mode from public.club_members m where m.club_id = t.club_id and m.user_id = v_uid;
 
-  if s.status = 'main' and v_mode = 'per_session'
+  if v_deadline is not null and s.status = 'main' and v_mode = 'per_session'
      and now() > t.starts_at - make_interval(hours => v_deadline) then
     update public.training_signups set status = 'late_cancel', has_car = false, wants_beer = false, updated_at = now()
     where id = s.id;
@@ -1340,6 +1358,9 @@ begin
   on conflict do nothing;
 
   select single_training_fee_amount into v_fee from public.clubs where id = t.club_id;
+  if not (select c.late_cancel_fee_enabled from public.clubs c where c.id = t.club_id) then
+    v_late_ids := '{}';
+  end if;
   v_day := (t.starts_at at time zone 'Europe/Warsaw')::date;
   v_label := t.title || ' ' || to_char(t.starts_at at time zone 'Europe/Warsaw', 'DD.MM.YYYY HH24:MI');
 
@@ -1878,8 +1899,8 @@ grant update (full_name, avatar_url) on public.profiles to authenticated;
 
 -- clubs: bez pending_owner_email i licznika
 grant select (id, name, prefix, invite_code, bank_account, bank_recipient, monthly_fee_amount,
-              single_training_fee_amount, cancellation_deadline_hours, default_max_participants,
-              default_location, created_at)
+              single_training_fee_amount, cancellation_deadline_hours, late_cancel_fee_enabled,
+              default_max_participants, default_location, created_at)
   on public.clubs to authenticated;
 
 -- club_members: bez aliasów (aliasy widzi tylko Właściciel przez admin_list_members)
@@ -1931,6 +1952,7 @@ grant execute on function public.set_member_billing(uuid, text) to authenticated
 grant execute on function public.set_member_aliases(uuid, text[]) to authenticated;
 grant execute on function public.update_club_settings(uuid, text, text, text, numeric, numeric, integer, integer, text) to authenticated;
 grant execute on function public.regenerate_invite_code(uuid) to authenticated;
+grant execute on function public.set_late_cancel_fee(uuid, boolean) to authenticated;
 grant execute on function public.join_training(uuid) to authenticated;
 grant execute on function public.leave_training(uuid) to authenticated;
 grant execute on function public.set_signup_flags(uuid, boolean, boolean) to authenticated;

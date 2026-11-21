@@ -34,6 +34,7 @@ export interface ClubInfo {
   monthly_fee_amount: number;
   single_training_fee_amount: number;
   cancellation_deadline_hours: number;
+  late_cancel_fee_enabled?: boolean;
   default_max_participants: number;
   default_location: string | null;
 }
