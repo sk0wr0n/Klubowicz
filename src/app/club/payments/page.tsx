@@ -8,6 +8,7 @@ import { currentPeriod, money, periodLabel, todayInput } from '@/lib/format';
 import type { AdminMember, Transaction } from '@/lib/types';
 import BalanceUpdateInfo from '@/components/BalanceUpdateInfo';
 import OwnerGuard from '@/components/OwnerGuard';
+import BankMini from '@/components/BankMini';
 import TransactionList from '@/components/TransactionList';
 import { useToast } from '@/components/Toast';
 import { Avatar, ConfirmModal, ErrorBox, Modal, PageTitle, Spinner } from '@/components/ui';
@@ -128,6 +129,7 @@ export default function PaymentsPage() {
   return (
     <OwnerGuard allowFinance>
       <PageTitle title="Rozliczenia" subtitle={`Łączne zadłużenie: ${money(totalDebt)}`} />
+      <BankMini />
       {error && <ErrorBox message={error} />}
       <BalanceUpdateInfo className="mb-4" />
 

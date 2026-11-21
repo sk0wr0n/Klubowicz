@@ -3802,13 +3802,272 @@ grant execute on function public.delete_budget_item(uuid, text, uuid, text) to a
 grant execute on function public.reset_budget_month(uuid, text) to authenticated;
 grant execute on function public.set_budget_public(uuid, boolean) to authenticated;
 
+-- =====================================================================
+-- 1) ZAPLANOWANA ZMIANA STAWEK (od kolejnego miesiąca)
+-- =====================================================================
+alter table public.clubs add column if not exists next_monthly_fee numeric(10,2) check (next_monthly_fee is null or next_monthly_fee >= 0);
+alter table public.clubs add column if not exists next_single_fee numeric(10,2) check (next_single_fee is null or next_single_fee >= 0);
+alter table public.clubs add column if not exists next_fees_from text
+  check (next_fees_from is null or next_fees_from ~ '^[0-9]{4}-(0[1-9]|1[0-2])$');
+
+-- Właściciel planuje nowe stawki od wskazanego (przyszłego) miesiąca
+create or replace function public.schedule_club_fees(p_club uuid, p_monthly numeric, p_single numeric, p_from text)
+returns void language plpgsql volatile security definer set search_path = public as $$
+declare
+  c     public.clubs%rowtype;
+  v_cur text := to_char(now() at time zone 'Europe/Warsaw', 'YYYY-MM');
+begin
+  perform public._require_owner(p_club);
+  if p_from !~ '^[0-9]{4}-(0[1-9]|1[0-2])$' or p_from <= v_cur then
+    raise exception 'Nowe stawki można ustawić od kolejnego miesiąca.';
+  end if;
+  if (p_monthly is not null and p_monthly < 0) or (p_single is not null and p_single < 0) then
+    raise exception 'Kwota nie może być ujemna.';
+  end if;
+  select * into c from public.clubs where id = p_club for update;
+  update public.clubs set
+    next_monthly_fee = case when p_monthly is null then next_monthly_fee else round(p_monthly, 2) end,
+    next_single_fee  = case when p_single is null then next_single_fee else round(p_single, 2) end,
+    next_fees_from   = p_from
+  where id = p_club;
+end $$;
+
+create or replace function public.cancel_scheduled_fees(p_club uuid)
+returns void language plpgsql volatile security definer set search_path = public as $$
+begin
+  perform public._require_owner(p_club);
+  update public.clubs set next_monthly_fee = null, next_single_fee = null, next_fees_from = null where id = p_club;
+end $$;
+
+-- Wprowadzenie zaplanowanych stawek (harmonogram: codziennie o północy + przed naliczeniem składek)
+create or replace function public._apply_scheduled_fees()
+returns integer language plpgsql volatile security definer set search_path = public as $$
+declare v_n integer;
+begin
+  update public.clubs set
+    monthly_fee_amount = coalesce(next_monthly_fee, monthly_fee_amount),
+    single_training_fee_amount = coalesce(next_single_fee, single_training_fee_amount),
+    next_monthly_fee = null, next_single_fee = null, next_fees_from = null
+  where next_fees_from is not null and next_fees_from <= to_char(now() at time zone 'Europe/Warsaw', 'YYYY-MM');
+  get diagnostics v_n = row_count;
+  return v_n;
+end $$;
+revoke all on function public._apply_scheduled_fees() from public, anon, authenticated;
+
+do $$
+begin
+  perform cron.unschedule(jobid) from cron.job where jobname in ('klubowicz-monthly-fees', 'klubowicz-apply-fees');
+  perform cron.schedule('klubowicz-apply-fees', '1 22,23 * * *', 'select public._apply_scheduled_fees()');
+  perform cron.schedule('klubowicz-monthly-fees', '0 5 1 * *',
+    'select public._apply_scheduled_fees(); select public._system_charge_monthly_fees()');
+end $$;
+
+-- ręczne naliczanie składek też najpierw wprowadza zaplanowane stawki
+do $$
+declare v_def text;
+begin
+  v_def := pg_get_functiondef('public.charge_monthly_fees(uuid, text)'::regprocedure);
+  if position('_apply_scheduled_fees' in v_def) = 0 then
+    v_def := replace(v_def, 'perform public._assert_club_not_suspended(p_club);
+  if p_period !~', 'perform public._assert_club_not_suspended(p_club);
+  perform public._apply_scheduled_fees();
+  if p_period !~');
+    if position('_apply_scheduled_fees' in v_def) = 0 then raise exception 'charge_monthly_fees: nie udało się podmienić'; end if;
+    execute v_def;
+  end if;
+end $$;
+
+-- budżet: w miesiącach od zmiany liczymy nowe stawki
+do $$
+declare v_def text;
+begin
+  v_def := pg_get_functiondef('public.budget_overview(uuid, text)'::regprocedure);
+  if position('next_fees_from' in v_def) = 0 then
+    v_def := replace(v_def, 'select * into c from public.clubs where id = p_club;', 'select * into c from public.clubs where id = p_club;
+  if c.next_fees_from is not null and v_period >= c.next_fees_from then
+    c.monthly_fee_amount := coalesce(c.next_monthly_fee, c.monthly_fee_amount);
+    c.single_training_fee_amount := coalesce(c.next_single_fee, c.single_training_fee_amount);
+  end if;');
+    v_def := replace(v_def, '''monthly_fee'', c.monthly_fee_amount,', '''monthly_fee'', c.monthly_fee_amount,
+    ''scheduled'', (select case when cl.next_fees_from is null then null
+                          else jsonb_build_object(''monthly'', coalesce(cl.next_monthly_fee, cl.monthly_fee_amount),
+                                                  ''single'', coalesce(cl.next_single_fee, cl.single_training_fee_amount),
+                                                  ''from'', cl.next_fees_from) end
+                     from public.clubs cl where cl.id = p_club),');
+    if position('''scheduled''' in v_def) = 0 or position('c.next_fees_from' in v_def) = 0 then
+      raise exception 'budget_overview: nie udało się podmienić';
+    end if;
+    execute v_def;
+  end if;
+end $$;
+
+-- kontekst klubu: zaplanowane stawki (widoczne dla wszystkich – informacja o zmianie od 1. dnia miesiąca)
+do $$
+declare v_def text;
+begin
+  v_def := pg_get_functiondef('public.club_context(uuid)'::regprocedure);
+  if position('next_fees' in v_def) = 0 then
+    v_def := replace(v_def, '''budget_public'', v_club.budget_public', '''budget_public'', v_club.budget_public,
+      ''next_fees'', case when v_club.next_fees_from is null then null
+                       else jsonb_build_object(''monthly'', coalesce(v_club.next_monthly_fee, v_club.monthly_fee_amount),
+                                               ''single'', coalesce(v_club.next_single_fee, v_club.single_training_fee_amount),
+                                               ''from'', v_club.next_fees_from) end');
+    if position('next_fees' in v_def) = 0 then raise exception 'club_context: nie udało się podmienić'; end if;
+    execute v_def;
+  end if;
+end $$;
+
+revoke all on function public.schedule_club_fees(uuid, numeric, numeric, text) from public, anon;
+revoke all on function public.cancel_scheduled_fees(uuid) from public, anon;
+grant execute on function public.schedule_club_fees(uuid, numeric, numeric, text) to authenticated;
+grant execute on function public.cancel_scheduled_fees(uuid) to authenticated;
+
+-- =====================================================================
+-- 2) KONTO KLUBU: historia operacji i saldo z wyciągów CSV (Właściciel + Skarbnik)
+-- =====================================================================
+create table if not exists public.bank_statement_rows (
+  id            uuid primary key default gen_random_uuid(),
+  club_id       uuid not null references public.clubs (id) on delete cascade,
+  booked_on     date not null,
+  amount        numeric(12,2) not null check (amount <> 0),
+  title         text,
+  counterparty  text,
+  balance_after numeric(12,2),
+  hash          text not null,
+  imported_at   timestamptz not null default now(),
+  imported_by   uuid references public.profiles (id) on delete set null,
+  unique (club_id, hash)
+);
+create index if not exists bank_statement_rows_club_idx on public.bank_statement_rows (club_id, booked_on desc);
+
+create table if not exists public.bank_balance_snapshots (
+  id         uuid primary key default gen_random_uuid(),
+  club_id    uuid not null references public.clubs (id) on delete cascade,
+  as_of      date not null,
+  balance    numeric(12,2) not null,
+  source     text not null default 'csv' check (source in ('csv', 'manual')),
+  created_at timestamptz not null default now(),
+  created_by uuid references public.profiles (id) on delete set null
+);
+create index if not exists bank_balance_snapshots_club_idx on public.bank_balance_snapshots (club_id, as_of desc, created_at desc);
+
+alter table public.bank_statement_rows enable row level security;
+alter table public.bank_balance_snapshots enable row level security;
+drop policy if exists bank_statement_rows_select on public.bank_statement_rows;
+create policy bank_statement_rows_select on public.bank_statement_rows for select to authenticated
+  using (public.is_club_finance(club_id) or public.is_superadmin());
+drop policy if exists bank_balance_snapshots_select on public.bank_balance_snapshots;
+create policy bank_balance_snapshots_select on public.bank_balance_snapshots for select to authenticated
+  using (public.is_club_finance(club_id) or public.is_superadmin());
+revoke all on public.bank_statement_rows, public.bank_balance_snapshots from anon, authenticated;
+grant select on public.bank_statement_rows, public.bank_balance_snapshots to authenticated;
+
+-- Zapis historii z wyciągu: [{date, amount, title, sender, balance, hash}], + saldo końcowe pliku
+create or replace function public.import_bank_statement(
+  p_club uuid, p_rows jsonb, p_closing_date date default null, p_closing_balance numeric default null
+)
+returns jsonb language plpgsql volatile security definer set search_path = public as $$
+declare
+  v_uid uuid := public._require_finance(p_club);
+  r     jsonb;
+  v_ins integer := 0;
+  v_n   integer;
+  v_amt numeric;
+begin
+  if jsonb_typeof(p_rows) <> 'array' then raise exception 'Nieprawidłowe dane.'; end if;
+  for r in select * from jsonb_array_elements(p_rows) loop
+    v_amt := round((r ->> 'amount')::numeric, 2);
+    if v_amt is null or v_amt = 0 or coalesce(r ->> 'hash', '') = '' or (r ->> 'date') is null then continue; end if;
+    insert into public.bank_statement_rows (club_id, booked_on, amount, title, counterparty, balance_after, hash, imported_by)
+    values (p_club, (r ->> 'date')::date, v_amt, left(r ->> 'title', 500), left(r ->> 'sender', 200),
+            round(nullif(r ->> 'balance', '')::numeric, 2), r ->> 'hash', v_uid)
+    on conflict (club_id, hash) do nothing;
+    get diagnostics v_n = row_count;
+    v_ins := v_ins + v_n;
+  end loop;
+  if p_closing_date is not null and p_closing_balance is not null then
+    insert into public.bank_balance_snapshots (club_id, as_of, balance, source, created_by)
+    values (p_club, p_closing_date, round(p_closing_balance, 2), 'csv', v_uid);
+  end if;
+  return jsonb_build_object('inserted', v_ins, 'skipped', jsonb_array_length(p_rows) - v_ins);
+end $$;
+
+-- Ręczne ustawienie stanu konta (np. z aplikacji banku) na koniec wskazanego dnia
+create or replace function public.set_bank_balance(p_club uuid, p_date date, p_balance numeric)
+returns void language plpgsql volatile security definer set search_path = public as $$
+declare v_uid uuid := public._require_finance(p_club);
+begin
+  if p_date is null or p_balance is null then raise exception 'Podaj datę i kwotę.'; end if;
+  insert into public.bank_balance_snapshots (club_id, as_of, balance, source, created_by)
+  values (p_club, p_date, round(p_balance, 2), 'manual', v_uid);
+end $$;
+
+-- Stan konta: ostatnie saldo z wyciągu/ręczne + operacje zaksięgowane po tej dacie
+create or replace function public.bank_overview(p_club uuid)
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare
+  s     public.bank_balance_snapshots%rowtype;
+  v_res jsonb;
+begin
+  if not (public.is_club_finance(p_club) or public.is_superadmin()) then
+    raise exception 'Konto klubu widzi tylko Właściciel i Skarbnik.' using errcode = '42501';
+  end if;
+  select * into s from public.bank_balance_snapshots where club_id = p_club order by as_of desc, created_at desc limit 1;
+  select jsonb_build_object(
+    'balance', case when s.id is null then null
+                    else s.balance + coalesce((select sum(amount) from public.bank_statement_rows
+                                               where club_id = p_club and booked_on > s.as_of), 0) end,
+    'snapshot', case when s.id is null then null
+                     else jsonb_build_object('as_of', s.as_of, 'balance', s.balance, 'source', s.source, 'created_at', s.created_at) end,
+    'last_date', (select max(booked_on) from public.bank_statement_rows where club_id = p_club),
+    'first_date', (select min(booked_on) from public.bank_statement_rows where club_id = p_club),
+    'last_import_at', (select max(imported_at) from public.bank_statement_rows where club_id = p_club),
+    'rows', (select count(*) from public.bank_statement_rows where club_id = p_club),
+    'months', coalesce((
+      select jsonb_agg(jsonb_build_object('period', m.period, 'inflow', m.inflow, 'outflow', m.outflow) order by m.period desc)
+      from (select to_char(booked_on, 'YYYY-MM') as period,
+                   sum(amount) filter (where amount > 0) as inflow,
+                   -sum(amount) filter (where amount < 0) as outflow
+            from public.bank_statement_rows where club_id = p_club
+            group by 1 order by 1 desc limit 12) m), '[]'::jsonb)
+  ) into v_res;
+  return v_res;
+end $$;
+
+-- Operacje z miesiąca + kto z zawodników (gdy wpływ zaksięgowano jako wpłatę)
+create or replace function public.bank_history(p_club uuid, p_period text)
+returns table (
+  id uuid, booked_on date, amount numeric, title text, counterparty text, balance_after numeric, member_id uuid
+)
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if not (public.is_club_finance(p_club) or public.is_superadmin()) then
+    raise exception 'Konto klubu widzi tylko Właściciel i Skarbnik.' using errcode = '42501';
+  end if;
+  return query
+    select b.id, b.booked_on, b.amount, b.title, b.counterparty, b.balance_after,
+           (select t.user_id from public.transactions t where t.club_id = p_club and t.bank_hash = b.hash limit 1)
+    from public.bank_statement_rows b
+    where b.club_id = p_club and to_char(b.booked_on, 'YYYY-MM') = p_period
+    order by b.booked_on desc, b.imported_at desc, b.id;
+end $$;
+
+revoke all on function public.import_bank_statement(uuid, jsonb, date, numeric) from public, anon;
+revoke all on function public.set_bank_balance(uuid, date, numeric) from public, anon;
+revoke all on function public.bank_overview(uuid) from public, anon;
+revoke all on function public.bank_history(uuid, text) from public, anon;
+grant execute on function public.import_bank_statement(uuid, jsonb, date, numeric) to authenticated;
+grant execute on function public.set_bank_balance(uuid, date, numeric) to authenticated;
+grant execute on function public.bank_overview(uuid) to authenticated;
+grant execute on function public.bank_history(uuid, text) to authenticated;
+
 -- Harmonogram: 1. dnia miesiąca o 05:00 UTC (06:00 zimą / 07:00 latem w Polsce)
 do $$
 begin
   if exists (select 1 from pg_available_extensions where name = 'pg_cron') then
     create extension if not exists pg_cron;
     perform cron.unschedule(jobid) from cron.job where jobname = 'klubowicz-monthly-fees';
-    perform cron.schedule('klubowicz-monthly-fees', '0 5 1 * *', 'select public._system_charge_monthly_fees()');
+    perform cron.schedule('klubowicz-monthly-fees', '0 5 1 * *', 'select public._apply_scheduled_fees(); select public._system_charge_monthly_fees()');
   end if;
 end $$;
 

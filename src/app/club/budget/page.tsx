@@ -35,11 +35,18 @@ interface Overview {
   single_fee: number;
   items: BudgetItem[];
   items_custom: boolean;
+  scheduled: { monthly: number; single: number; from: string } | null;
   can_edit: boolean;
   monthly: { members: number; charged_count: number; charged: number; expected: number; expected_count: number };
   avg_per_session: number;
   trainings: BudgetTraining[];
   payments_in: number;
+}
+
+/** „2026-12” → „1 grudnia 2026” */
+function firstDayLabel(p: string): string {
+  const [y, m] = p.split('-').map(Number);
+  return new Date(y, m - 1, 1).toLocaleDateString('pl-PL', { day: 'numeric', month: 'long', year: 'numeric' });
 }
 
 function shiftPeriod(p: string, delta: number): string {
@@ -229,22 +236,38 @@ export default function BudgetPage() {
   async function applySuggestion() {
     if (!apply) return;
     setBusy(true);
-    const { error } = await supabase().rpc('set_club_fees', {
+    const { error } = await supabase().rpc('schedule_club_fees', {
       p_club: clubId,
       p_monthly: apply.monthly,
       p_single: apply.single,
+      p_from: applyFrom,
     });
     setBusy(false);
     setApply(null);
     if (error) toast(errMsg(error), 'error');
     else {
-      toast('Zmieniono stawki. Obowiązują od kolejnych naliczeń.');
+      toast(`Nowe stawki zaplanowane od ${firstDayLabel(applyFrom)}.`);
       await reload();
       await load();
     }
   }
 
   const isCurrent = period === currentPeriod();
+  // zmiany stawek zawsze od kolejnego miesiąca (albo od oglądanego, jeśli jest w przyszłości)
+  const nextMonth = shiftPeriod(currentPeriod(), 1);
+  const applyFrom = period > nextMonth ? period : nextMonth;
+
+  async function cancelScheduled() {
+    setBusy(true);
+    const { error } = await supabase().rpc('cancel_scheduled_fees', { p_club: clubId });
+    setBusy(false);
+    if (error) toast(errMsg(error), 'error');
+    else {
+      toast('Anulowano zaplanowaną zmianę stawek.');
+      await reload();
+      await load();
+    }
+  }
   const canEdit = data?.can_edit === true;
   const monthName = periodLabel(period).split(' ')[0];
   const pct = (v: number) => (calc && calc.target > 0 ? Math.min(100, Math.round((v / calc.target) * 100)) : 0);
@@ -271,6 +294,22 @@ export default function BudgetPage() {
         !error && <Spinner className="mx-auto my-10 h-6 w-6 text-indigo-600" />
       ) : (
         <div className="flex flex-col gap-4">
+          {data.scheduled && (
+            <div className="flex items-start gap-3 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm">
+              <span className="min-w-0 flex-1">
+                <span className="block font-semibold text-indigo-900">Od {firstDayLabel(data.scheduled.from)} nowe stawki</span>
+                <span className="block text-xs text-indigo-800">
+                  składka {money(data.scheduled.monthly)} · trening {money(data.scheduled.single)}
+                  {period >= data.scheduled.from ? ' – uwzględnione w tym miesiącu' : ''}
+                </span>
+              </span>
+              {isOwner && (
+                <button className="shrink-0 text-xs font-semibold text-indigo-700 underline" disabled={busy} onClick={() => void cancelScheduled()}>
+                  Anuluj
+                </button>
+              )}
+            </div>
+          )}
           {/* CEL */}
           <div className="card">
             <div className="mb-2 flex items-center justify-between">
@@ -412,7 +451,7 @@ export default function BudgetPage() {
                         </span>
                         {isOwner && (
                           <button className="btn btn-secondary btn-sm shrink-0" onClick={() => setApply(s)}>
-                            Ustaw
+                            Od {firstDayLabel(applyFrom).split(' ').slice(0, 2).join(' ')}
                           </button>
                         )}
                       </li>
@@ -598,7 +637,7 @@ export default function BudgetPage() {
       </Modal>
       <ConfirmModal
         open={apply !== null}
-        title="Zmienić stawki?"
+        title={`Nowe stawki od ${firstDayLabel(applyFrom)}?`}
         message={
           apply ? (
             <>
@@ -613,15 +652,15 @@ export default function BudgetPage() {
                 </span>
               )}
               <span className="mt-2 block text-xs text-slate-500">
-                Nowe stawki obowiązują od kolejnych naliczeń (najbliższa składka, kolejne rozliczone treningi). Już naliczone opłaty się
-                nie zmieniają. Warto uprzedzić zawodników.
+                Do końca bieżącego miesiąca obowiązują dotychczasowe stawki. Od {firstDayLabel(applyFrom)} nowa składka i opłata za
+                treningi rozliczane od tego dnia. Zawodnicy zobaczą zapowiedź zmiany w Finansach. Możesz ją anulować do tego czasu.
               </span>
             </>
           ) : (
             ''
           )
         }
-        confirmText="Zmień stawki"
+        confirmText="Zaplanuj zmianę"
         busy={busy}
         onConfirm={() => void applySuggestion()}
         onClose={() => setApply(null)}

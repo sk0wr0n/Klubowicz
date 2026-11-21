@@ -59,7 +59,17 @@ const FIELDS: { key: keyof ColumnMap; label: string; required: boolean }[] = [
   { key: 'title', label: 'Tytuł / opis', required: true },
   { key: 'sender', label: 'Nadawca', required: false },
   { key: 'account', label: 'Rachunek nadawcy', required: false },
+  { key: 'balance', label: 'Saldo po operacji', required: false },
 ];
+
+interface StmtRow {
+  date: string;
+  amount: number;
+  title: string;
+  sender: string;
+  balance: number | null;
+  hash: string;
+}
 
 export default function ImportPage() {
   const { clubId, ctx, suspended, reload } = useClub();
@@ -70,13 +80,17 @@ export default function ImportPage() {
   const [info, setInfo] = useState<{ encoding: string; delimiter: string; headerRow: number } | null>(null);
   const [headers, setHeaders] = useState<string[]>([]);
   const [dataRows, setDataRows] = useState<string[][]>([]);
-  const [map, setMap] = useState<ColumnMap>({ date: -1, amount: -1, title: -1, sender: -1, account: -1 });
+  const [map, setMap] = useState<ColumnMap>({ date: -1, amount: -1, title: -1, sender: -1, account: -1, balance: -1 });
   const [preview, setPreview] = useState<PreviewRow[]>([]);
   const [skippedOut, setSkippedOut] = useState(0);
   const [working, setWorking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirm, setConfirm] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [stmt, setStmt] = useState<StmtRow[]>([]);
+  const [closing, setClosing] = useState<{ date: string; balance: number } | null>(null);
+  const [manualClosing, setManualClosing] = useState('');
+  const [stmtSaved, setStmtSaved] = useState(false);
 
   useEffect(() => {
     supabase()
@@ -122,6 +136,8 @@ export default function ImportPage() {
   useEffect(() => {
     if (!dataRows.length || map.date < 0 || map.amount < 0 || map.title < 0) {
       setPreview([]);
+      setStmt([]);
+      setClosing(null);
       return;
     }
     let cancelled = false;
@@ -130,21 +146,30 @@ export default function ImportPage() {
       const out: PreviewRow[] = [];
       const seen: Record<string, number> = {};
       let outgoing = 0;
+      const st: StmtRow[] = [];
+      const withBal: { date: string; i: number; balance: number }[] = [];
+      let firstDate: string | null = null;
+      let lastDate: string | null = null;
       for (let i = 0; i < dataRows.length; i++) {
         const r = dataRows[i];
         const amount = parseAmount(r[map.amount]);
         const date = parseDate(r[map.date]);
-        if (amount === null || !date) continue;
-        if (amount <= 0) {
-          outgoing++;
-          continue;
-        }
+        if (amount === null || !date || amount === 0) continue;
+        firstDate ??= date;
+        lastDate = date;
         const title = r[map.title] ?? '';
         const sender = map.sender >= 0 ? (r[map.sender] ?? '') : '';
         const account = map.account >= 0 ? (r[map.account] ?? '').replace(/\s/g, '') : '';
+        const balance = map.balance >= 0 ? parseAmount(r[map.balance]) : null;
         const base = `${date}|${amount.toFixed(2)}|${normalize(title)}|${normalize(sender)}|${account}`;
         seen[base] = (seen[base] ?? 0) + 1;
         const hash = await sha256(`${base}|#${seen[base]}`);
+        st.push({ date, amount, title, sender, balance, hash });
+        if (balance !== null) withBal.push({ date, i, balance });
+        if (amount < 0) {
+          outgoing++;
+          continue;
+        }
         const m = matchMember(title, sender, ctx.club.prefix, candidates);
         out.push({
           idx: i,
@@ -171,9 +196,21 @@ export default function ImportPage() {
           o.selected = false;
         }
       }
+      // saldo końcowe pliku: najnowsza operacja (banki sortują rosnąco albo malejąco)
+      let close: { date: string; balance: number } | null = null;
+      if (withBal.length) {
+        const maxDate = withBal.reduce((m, x) => (x.date > m ? x.date : m), withBal[0].date);
+        const sameDay = withBal.filter((x) => x.date === maxDate);
+        const desc = firstDate !== null && lastDate !== null && firstDate > lastDate;
+        const pick = desc ? sameDay[0] : sameDay[sameDay.length - 1];
+        close = { date: maxDate, balance: pick.balance };
+      }
       if (!cancelled) {
         setPreview(out);
         setSkippedOut(outgoing);
+        setStmt(st);
+        setClosing(close);
+        setStmtSaved(false);
         setWorking(false);
       }
     })();
@@ -187,6 +224,32 @@ export default function ImportPage() {
 
   function update(idx: number, patch: Partial<PreviewRow>) {
     setPreview((prev) => prev.map((p) => (p.idx === idx ? { ...p, ...patch } : p)));
+  }
+
+  const stmtMaxDate = stmt.reduce((m, x) => (x.date > m ? x.date : m), '');
+  const stmtIn = stmt.filter((x) => x.amount > 0).reduce((s, x) => s + x.amount, 0);
+  const stmtOut = -stmt.filter((x) => x.amount < 0).reduce((s, x) => s + x.amount, 0);
+
+  async function saveStatement(silent = false): Promise<boolean> {
+    if (!stmt.length) return true;
+    const manual = manualClosing.trim() ? parseAmount(manualClosing) : null;
+    const closeBal = closing?.balance ?? manual;
+    const { data, error } = await supabase().rpc('import_bank_statement', {
+      p_club: clubId,
+      p_rows: stmt,
+      p_closing_date: closeBal !== null && closeBal !== undefined ? (closing?.date ?? stmtMaxDate) : null,
+      p_closing_balance: closeBal ?? null,
+    });
+    if (error) {
+      toast(errMsg(error), 'error');
+      return false;
+    }
+    setStmtSaved(true);
+    if (!silent) {
+      const r = data as { inserted: number; skipped: number };
+      toast(`Historia konta: zapisano ${r.inserted} operacji${r.skipped ? `, pominięto ${r.skipped} (już były)` : ''}.`);
+    }
+    return true;
   }
 
   async function book() {
@@ -207,6 +270,7 @@ export default function ImportPage() {
       return;
     }
     const res = data as { inserted: number; skipped: number };
+    await saveStatement(true);
 
     // zapamiętaj nadawców ręcznie przypisanych przelewów jako aliasy zawodników
     const aliasAdds = new Map<string, Set<string>>();
@@ -242,7 +306,7 @@ export default function ImportPage() {
     <OwnerGuard allowFinance>
       <PageTitle
         title="Import wyciągu CSV"
-        subtitle="Plik jest analizowany wyłącznie w Twojej przeglądarce – do bazy trafiają tylko zatwierdzone wpłaty."
+        subtitle="Plik jest analizowany w Twojej przeglądarce. Do bazy trafiają zatwierdzone wpłaty i historia operacji konta klubu (widoczna tylko dla Właściciela i Skarbnika)."
       />
       {suspended && <ErrorBox message="Import jest zablokowany – klub jest zawieszony." />}
 
@@ -311,6 +375,51 @@ export default function ImportPage() {
       )}
 
       {working && <Spinner className="mx-auto my-6 h-6 w-6 text-indigo-600" />}
+
+      {!working && stmt.length > 0 && (
+        <div className="card mb-4 flex flex-col gap-2">
+          <h2 className="font-semibold">Historia konta klubu</h2>
+          <p className="text-sm text-slate-600">
+            W pliku {stmt.length} operacji: wpływy <span className="font-semibold text-emerald-600">+{money(stmtIn)}</span>, wydatki{' '}
+            <span className="font-semibold text-red-600">−{money(stmtOut)}</span>.
+          </p>
+          {closing ? (
+            <p className="text-sm">
+              Saldo na {formatDate(closing.date)}: <strong>{money(closing.balance)}</strong>
+            </p>
+          ) : (
+            <div>
+              <label className="label">Saldo na koniec wyciągu ({stmtMaxDate ? formatDate(stmtMaxDate) : '—'}) – opcjonalnie</label>
+              <input
+                className="input"
+                inputMode="decimal"
+                placeholder="np. 2450,30 – z aplikacji banku"
+                value={manualClosing}
+                onChange={(e) => setManualClosing(e.target.value)}
+              />
+              <p className="mt-1 text-[11px] text-slate-500">
+                W pliku nie ma kolumny z saldem. Wpisz stan konta, żeby aplikacja pokazywała saldo klubu.
+              </p>
+            </div>
+          )}
+          <button
+            className="btn btn-secondary"
+            disabled={busy || stmtSaved}
+            onClick={() =>
+              void (async () => {
+                setBusy(true);
+                await saveStatement();
+                setBusy(false);
+              })()
+            }
+          >
+            {stmtSaved ? '✓ Historia zapisana' : `Zapisz historię konta (${stmt.length} operacji)`}
+          </button>
+          <p className="text-[11px] text-slate-500">
+            Zapisuje się też automatycznie przy księgowaniu wpłat. Ponowny import tego samego pliku nie tworzy duplikatów.
+          </p>
+        </div>
+      )}
 
       {!working && dataRows.length > 0 && preview.length === 0 && (
         <div className="card mb-4 text-sm text-slate-600">
@@ -441,7 +550,7 @@ export default function ImportPage() {
         message={
           <>
             Zostanie zaksięgowanych <strong>{toBook.length}</strong> wpłat na łączną kwotę <strong>{money(toBookSum)}</strong>.
-            Ponowny import tego samego pliku nie spowoduje duplikatów.
+            Zapiszemy też historię konta z pliku ({stmt.length} operacji). Ponowny import tego samego pliku nie spowoduje duplikatów.
           </>
         }
         confirmText="Zaksięguj"

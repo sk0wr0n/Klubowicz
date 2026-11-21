@@ -48,6 +48,7 @@ export interface ClubInfo {
   default_location: string | null;
   logo_url?: string | null;
   budget_public?: boolean;
+  next_fees?: { monthly: number; single: number; from: string } | null;
 }
 
 export interface PlatformInfo {

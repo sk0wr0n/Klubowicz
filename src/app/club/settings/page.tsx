@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { ImagePlus, Save, Trash2, Volleyball } from 'lucide-react';
 import { useClub } from '@/lib/club';
+import { money } from '@/lib/format';
 import { toSquarePng } from '@/lib/image';
 import { errMsg, supabase } from '@/lib/supabase';
 import OwnerGuard from '@/components/OwnerGuard';
@@ -238,6 +239,12 @@ export default function SettingsPage() {
               <input className="input" inputMode="decimal" value={single} onChange={(e) => setSingle(e.target.value)} />
             </div>
           </div>
+          <p className="-mt-1 text-[11px] text-slate-500">
+            Zmiana tutaj działa od razu. Żeby zmienić stawki od 1. dnia kolejnego miesiąca, użyj podpowiedzi w Zarządzanie → Budżet
+            miesiąca.
+            {c.next_fees &&
+              ` Zaplanowano od ${c.next_fees.from}: składka ${money(c.next_fees.monthly)}, trening ${money(c.next_fees.single)}.`}
+          </p>
           <div className="rounded-xl border border-slate-200 p-3">
             <div className="flex items-start justify-between gap-3">
               <div>

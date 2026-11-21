@@ -66,6 +66,23 @@ export default function FinancePage() {
       <PageTitle title="Moje finanse" subtitle={ctx.club.name} />
       {error && <ErrorBox message={error} />}
       <BudgetMini />
+      {ctx.club.next_fees && (
+        <div className="mb-4 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-900">
+          <p className="font-semibold">
+            Zmiana stawek od{' '}
+            {(() => {
+              const [y, m] = ctx.club.next_fees.from.split('-').map(Number);
+              return new Date(y, m - 1, 1).toLocaleDateString('pl-PL', { day: 'numeric', month: 'long' });
+            })()}
+          </p>
+          <p className="text-xs text-indigo-800">
+            {Number(ctx.club.next_fees.monthly) !== Number(ctx.club.monthly_fee_amount) &&
+              `Składka miesięczna: ${money(ctx.club.monthly_fee_amount)} → ${money(ctx.club.next_fees.monthly)}. `}
+            {Number(ctx.club.next_fees.single) !== Number(ctx.club.single_training_fee_amount) &&
+              `Opłata za trening: ${money(ctx.club.single_training_fee_amount)} → ${money(ctx.club.next_fees.single)}.`}
+          </p>
+        </div>
+      )}
 
       <div className={`card mb-4 text-center ${balance < 0 ? 'border-red-200 bg-red-50' : 'border-emerald-200 bg-emerald-50'}`}>
         <p className="text-sm font-medium text-slate-600">Twoje saldo w klubie</p>

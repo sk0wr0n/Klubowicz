@@ -1,5 +1,5 @@
 // Lokalny (w przeglądarce) parser wyciągów bankowych CSV.
-// Plik NIE jest wysyłany na żaden serwer – do bazy trafiają tylko zatwierdzone wpłaty.
+// Plik NIE jest wysyłany na serwer – do bazy trafiają zatwierdzone wpłaty i (opcjonalnie) historia operacji konta klubu.
 
 export type CsvEncoding = 'auto' | 'utf-8' | 'windows-1250';
 
@@ -9,6 +9,7 @@ export interface ColumnMap {
   title: number;
   sender: number;
   account: number;
+  balance: number;
 }
 
 export interface MatchCandidate {
@@ -124,7 +125,8 @@ export function guessColumns(headers: string[]): ColumnMap {
   const title = find(/tytul|title|opis|description|szczegoly/);
   const sender = find(/nadawc|kontrahent|zleceniodawc|odbiorca|sender|payer|nazwa/);
   const account = find(/rachunek|konto|account|iban|numer/, /saldo/);
-  return { date, amount, title, sender, account };
+  const balance = find(/saldo|balance/);
+  return { date, amount, title, sender, account, balance };
 }
 
 export function parseAmount(raw: string | undefined): number | null {

@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
-import { Banknote, ChevronRight, FileUp, RefreshCw, Settings, Target, Users } from 'lucide-react';
+import { Banknote, ChevronRight, FileUp, Landmark, RefreshCw, Settings, Target, Users } from 'lucide-react';
 import { useClub } from '@/lib/club';
 import { errMsg, supabase } from '@/lib/supabase';
 import { clubHref, inviteLink } from '@/lib/nav';
@@ -39,6 +39,12 @@ export default function AdminHubPage() {
       icon: Banknote,
       title: 'Rozliczenia',
       desc: 'Salda, naliczanie składek, ręczne wpłaty',
+    },
+    {
+      href: clubHref(clubId, 'bank'),
+      icon: Landmark,
+      title: 'Konto klubu',
+      desc: 'Stan konta i historia operacji z wyciągów CSV',
     },
     {
       href: clubHref(clubId, 'import'),
