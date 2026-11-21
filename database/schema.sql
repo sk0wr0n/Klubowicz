@@ -499,6 +499,18 @@ create trigger trainings_rebalance
   after update of max_participants on public.trainings
   for each row execute function public.trainings_after_update();
 
+-- Głosowanie na trenera treningu (anonimowe; jeden głos na osobę na trening)
+create table if not exists public.training_coach_votes (
+  training_id  uuid not null references public.trainings (id) on delete cascade,
+  club_id      uuid not null references public.clubs (id) on delete cascade,
+  voter_id     uuid not null references public.profiles (id) on delete cascade,
+  candidate_id uuid not null references public.profiles (id) on delete cascade,
+  voted_at     timestamptz not null default now(),
+  primary key (training_id, voter_id),
+  check (voter_id <> candidate_id)
+);
+create index if not exists training_coach_votes_candidate_idx on public.training_coach_votes (training_id, candidate_id);
+
 -- Historia zmian trybu rozliczeń (abonament / za trening) – zapisywana automatycznie
 create table if not exists public.billing_mode_changes (
   id         uuid primary key default gen_random_uuid(),
@@ -545,6 +557,12 @@ alter table public.platform_subscriptions enable row level security;
 alter table public.platform_invoices      enable row level security;
 alter table public.platform_settings      enable row level security;
 alter table public.billing_mode_changes   enable row level security;
+alter table public.training_coach_votes   enable row level security;
+
+-- TRAINING_COACH_VOTES: każdy widzi tylko swój głos; wyniki (bez nazwisk głosujących) przez RPC coach_votes
+drop policy if exists training_coach_votes_select on public.training_coach_votes;
+create policy training_coach_votes_select on public.training_coach_votes for select to authenticated
+  using (voter_id = auth.uid());
 
 -- BILLING_MODE_CHANGES: własna historia; Opiekun/Właściciel – historia członków klubu
 drop policy if exists billing_mode_changes_select on public.billing_mode_changes;
@@ -980,6 +998,70 @@ begin
   update public.clubs set invite_code = public._gen_invite_code(prefix)
   where id = p_club returning invite_code into v_code;
   return v_code;
+end $$;
+
+-- ---------- Treningi: głosowanie na trenera ----------
+
+-- Oddanie / zmiana / wycofanie (p_candidate = null) głosu na trenera treningu
+create or replace function public.vote_coach(p_training uuid, p_candidate uuid)
+returns void language plpgsql volatile security definer set search_path = public as $$
+declare
+  v_uid uuid := public._require_uid();
+  t     public.trainings%rowtype;
+begin
+  select * into t from public.trainings where id = p_training;
+  if not found then raise exception 'Trening nie istnieje.'; end if;
+  if not public.is_club_member(t.club_id) then
+    raise exception 'Nie jesteś aktywnym członkiem tego klubu.' using errcode = '42501';
+  end if;
+  if t.status <> 'scheduled' or t.starts_at <= now() then
+    raise exception 'Głosowanie na trenera jest już zamknięte.';
+  end if;
+  if not exists (select 1 from public.training_signups
+                 where training_id = p_training and user_id = v_uid and status in ('main', 'reserve')) then
+    raise exception 'Najpierw zapisz się na trening, aby głosować.';
+  end if;
+
+  if p_candidate is null then
+    delete from public.training_coach_votes where training_id = p_training and voter_id = v_uid;
+    return;
+  end if;
+  if p_candidate = v_uid then
+    raise exception 'Nie można głosować na siebie.';
+  end if;
+  if not exists (select 1 from public.training_signups
+                 where training_id = p_training and user_id = p_candidate and status = 'main') then
+    raise exception 'Można głosować tylko na osoby z listy głównej treningu.';
+  end if;
+
+  insert into public.training_coach_votes (training_id, club_id, voter_id, candidate_id)
+  values (p_training, t.club_id, v_uid, p_candidate)
+  on conflict (training_id, voter_id) do update
+    set candidate_id = excluded.candidate_id, voted_at = now();
+end $$;
+
+-- Wyniki głosowania: liczba głosów na kandydata + czy to mój głos.
+-- Liczą się głosy osób nadal zapisanych, oddane na osoby nadal na liście głównej.
+create or replace function public.coach_votes(p_training uuid)
+returns table (candidate_id uuid, votes integer, is_my_vote boolean)
+language plpgsql stable security definer set search_path = public as $$
+declare
+  v_uid  uuid := public._require_uid();
+  v_club uuid;
+begin
+  select club_id into v_club from public.trainings where id = p_training;
+  if v_club is null or not (public.is_club_member(v_club) or public.is_superadmin()) then
+    raise exception 'Nie masz dostępu do tego treningu.' using errcode = '42501';
+  end if;
+  return query
+    select v.candidate_id, count(*)::int, bool_or(v.voter_id = v_uid)
+    from public.training_coach_votes v
+    join public.training_signups c on c.training_id = v.training_id and c.user_id = v.candidate_id and c.status = 'main'
+    join public.training_signups s on s.training_id = v.training_id and s.user_id = v.voter_id
+                                  and s.status in ('main', 'reserve')
+    where v.training_id = p_training
+    group by v.candidate_id
+    order by count(*) desc;
 end $$;
 
 -- ---------- Treningi: zapisy ----------
@@ -1697,6 +1779,7 @@ grant select on public.platform_subscriptions to authenticated;
 grant select on public.platform_invoices to authenticated;
 grant select on public.platform_settings to authenticated;
 grant select on public.billing_mode_changes to authenticated;
+grant select on public.training_coach_votes to authenticated;
 grant update (platform_name, bank_account, bank_recipient, contact_email, updated_at) on public.platform_settings to authenticated;
 
 -- funkcje używane w politykach RLS
@@ -1712,6 +1795,8 @@ grant execute on function public.my_memberships() to authenticated;
 grant execute on function public.invite_info(text) to authenticated;
 grant execute on function public.join_club_by_code(text, text, text) to authenticated;
 grant execute on function public.set_my_position(uuid, text) to authenticated;
+grant execute on function public.vote_coach(uuid, uuid) to authenticated;
+grant execute on function public.coach_votes(uuid) to authenticated;
 grant execute on function public.set_member_position(uuid, text) to authenticated;
 grant execute on function public.set_my_billing_mode(uuid, text) to authenticated;
 grant execute on function public.club_context(uuid) to authenticated;

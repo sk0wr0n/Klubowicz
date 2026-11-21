@@ -23,6 +23,7 @@ import { errMsg, supabase } from '@/lib/supabase';
 import { formatDay, formatTime, hoursUntil, money } from '@/lib/format';
 import { clubHref } from '@/lib/nav';
 import type { Attendance, Signup, Training } from '@/lib/types';
+import CoachVote from '@/components/CoachVote';
 import MemberPicker from '@/components/MemberPicker';
 import { PositionBadge, PositionSummary } from '@/components/Position';
 import TrainingFormModal from '@/components/TrainingFormModal';
@@ -49,6 +50,7 @@ export default function TrainingPage() {
   const [editOpen, setEditOpen] = useState(false);
   const [picker, setPicker] = useState<'list' | 'attendance' | null>(null);
   const [attMode, setAttMode] = useState(false);
+  const [voteOpen, setVoteOpen] = useState(false);
   const [present, setPresent] = useState<Set<string>>(new Set());
   const [chargeLate, setChargeLate] = useState<Set<string>>(new Set());
 
@@ -140,6 +142,7 @@ export default function TrainingPage() {
       if (res === 'main') toast('Zapisano! Jesteś na liście głównej.');
       else toast('Lista jest pełna – jesteś na liście rezerwowej. Awansujesz automatycznie, gdy zwolni się miejsce.', 'info');
       await load();
+      setVoteOpen(true);
     } catch {
       /* komunikat pokazany */
     }
@@ -409,6 +412,8 @@ export default function TrainingPage() {
           </div>
         )}
       </div>
+
+      <CoachVote training={training} signups={signups} userId={userId} open={voteOpen} onOpenChange={setVoteOpen} />
 
       {/* Tryb sprawdzania obecności */}
       {attMode ? (
