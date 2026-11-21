@@ -29,6 +29,7 @@ import { EventPositionModal, PositionBadge, PositionSummary } from '@/components
 import TrainingFormModal from '@/components/TrainingFormModal';
 import { StatusBadge } from '@/components/TrainingCard';
 import { useToast } from '@/components/Toast';
+import MemberProfileModal from '@/components/MemberProfileModal';
 import { Avatar, ConfirmModal, EmptyState, Spinner } from '@/components/ui';
 
 type ConfirmKind = 'join' | 'leave' | 'settle' | 'cancel' | 'restore' | 'delete' | 'remove' | null;
@@ -53,6 +54,7 @@ export default function TrainingPage() {
   const [voteOpen, setVoteOpen] = useState(false);
   const [mvpOpen, setMvpOpen] = useState(false);
   const [posEdit, setPosEdit] = useState<{ uid: string; afterJoin?: boolean } | null>(null);
+  const [profileUid, setProfileUid] = useState<string | null>(null);
   const [posBusy, setPosBusy] = useState(false);
   const [present, setPresent] = useState<Set<string>>(new Set());
   const [chargeLate, setChargeLate] = useState<Set<string>>(new Set());
@@ -281,14 +283,21 @@ export default function TrainingPage() {
     return (
       <li className="flex items-center gap-3 py-2.5">
         {index !== undefined && <span className="w-5 text-right text-xs font-semibold text-slate-400">{index}.</span>}
-        <Avatar name={m?.profiles?.full_name} url={m?.profiles?.avatar_url} size="h-8 w-8" />
-        <div className="min-w-0 flex-1">
-          <p className={`truncate text-sm font-medium ${s.user_id === userId ? 'text-indigo-700' : 'text-slate-800'}`}>
-            {nameOf(s.user_id)}
-            {s.user_id === userId && ' (Ty)'}
-          </p>
-          {s.added_by_staff && <p className="text-[11px] text-slate-400">dopisany przez opiekuna</p>}
-        </div>
+        <button
+          type="button"
+          className="flex min-w-0 flex-1 items-center gap-3 text-left"
+          onClick={() => setProfileUid(s.user_id)}
+          aria-label="Pokaż profil"
+        >
+          <Avatar name={m?.profiles?.full_name} url={m?.profiles?.avatar_url} size="h-8 w-8" />
+          <span className="min-w-0 flex-1">
+            <span className={`block truncate text-sm font-medium ${s.user_id === userId ? 'text-indigo-700' : 'text-slate-800'}`}>
+              {nameOf(s.user_id)}
+              {s.user_id === userId && ' (Ty)'}
+            </span>
+            {s.added_by_staff && <span className="block text-[11px] text-slate-400">dopisany przez opiekuna</span>}
+          </span>
+        </button>
         {(s.user_id === userId || isStaff) && training?.status === 'scheduled' ? (
           <button
             type="button"
@@ -816,6 +825,7 @@ export default function TrainingPage() {
         }}
       />
       <TrainingFormModal open={editOpen} onClose={() => setEditOpen(false)} onSaved={() => void load()} training={training} />
+      <MemberProfileModal userId={profileUid} onClose={() => setProfileUid(null)} />
     </>
   );
 }

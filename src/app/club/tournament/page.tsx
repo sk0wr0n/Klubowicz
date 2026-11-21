@@ -29,6 +29,7 @@ import { EventPositionModal, PositionBadge, PositionSummary } from '@/components
 import { deadlineLabel } from '@/components/TournamentCard';
 import TournamentFormModal from '@/components/TournamentFormModal';
 import { useToast } from '@/components/Toast';
+import MemberProfileModal from '@/components/MemberProfileModal';
 import { Avatar, ConfirmModal, EmptyState, Modal, Spinner } from '@/components/ui';
 
 type Confirm = 'close' | 'reopen' | 'delete' | 'leave' | null;
@@ -105,6 +106,7 @@ export default function TournamentPage() {
   const [myDays, setMyDays] = useState<Set<string>>(new Set());
   const [myNote, setMyNote] = useState('');
   const [posEdit, setPosEdit] = useState<string | null>(null);
+  const [profileUid, setProfileUid] = useState<string | null>(null);
   const [posBusy, setPosBusy] = useState(false);
 
   const load = useCallback(async () => {
@@ -463,12 +465,18 @@ export default function TournamentPage() {
                 <li key={p.user_id} className="py-2.5">
                   <div className="flex items-center gap-3">
                     <span className="w-5 text-right text-xs text-slate-400">{i + 1}.</span>
-                    <Avatar name={m?.profiles?.full_name} url={m?.profiles?.avatar_url} size="h-8 w-8" />
+                    <button type="button" className="shrink-0" onClick={() => setProfileUid(p.user_id)} aria-label="Pokaż profil">
+                      <Avatar name={m?.profiles?.full_name} url={m?.profiles?.avatar_url} size="h-8 w-8" />
+                    </button>
                     <div className="min-w-0 flex-1">
-                      <p className={`truncate text-sm font-medium ${p.user_id === userId ? 'text-indigo-700' : ''}`}>
+                      <button
+                        type="button"
+                        onClick={() => setProfileUid(p.user_id)}
+                        className={`block max-w-full truncate text-left text-sm font-medium ${p.user_id === userId ? 'text-indigo-700' : ''}`}
+                      >
                         {nameOf(p.user_id)}
                         {p.user_id === userId && ' (Ty)'}
-                      </p>
+                      </button>
                       {(avail[p.user_id]?.days || avail[p.user_id]?.note) && (
                         <p className="text-[11px] text-slate-500">
                           {avail[p.user_id]?.days && (
@@ -786,6 +794,7 @@ export default function TournamentPage() {
         }
         onClose={() => setDelExtra(null)}
       />
+      <MemberProfileModal userId={profileUid} onClose={() => setProfileUid(null)} />
     </>
   );
 }
