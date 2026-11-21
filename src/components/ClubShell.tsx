@@ -93,7 +93,7 @@ export default function ClubShell({ children }: { children: ReactNode }) {
   if (!value) return <FullScreenLoader />;
 
   const nav = [
-    { href: clubHref(clubId), match: '/club/', label: 'Treningi', icon: CalendarDays, show: true },
+    { href: clubHref(clubId), match: '/club/', label: 'Zapisy', icon: CalendarDays, show: true },
     { href: clubHref(clubId, 'team'), match: '/club/team/', label: 'Zespół', icon: Users, show: value.isStaff },
     { href: clubHref(clubId, 'stats'), match: '/club/stats/', label: 'Statystyki', icon: Trophy, show: true },
     { href: clubHref(clubId, 'finance'), match: '/club/finance/', label: 'Finanse', icon: Wallet, show: true },
