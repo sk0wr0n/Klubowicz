@@ -15,7 +15,7 @@ const SMTP_PASSWORD = Deno.env.get("SMTP_PASSWORD") ?? "";
 type Row = {
   id: number;
   to_email: string;
-  kind: "new_member" | "charge";
+  kind: "new_member" | "charge" | "backup";
   club_id: string | null;
   user_id: string | null;
   payload: Record<string, unknown>;
@@ -80,6 +80,52 @@ function render(r: Row): { subject: string; html: string } {
     };
   }
   return { subject: "", html: "" };
+}
+
+const TABLE_LABEL: Record<string, string> = {
+  profiles: "Profile (osoby)",
+  clubs: "Kluby",
+  club_members: "Członkostwa",
+  trainings: "Treningi",
+  training_signups: "Zapisy na treningi",
+  training_attendance: "Obecności",
+  transactions: "Wpłaty i obciążenia",
+  tournaments: "Turnieje",
+  tournament_signups: "Zapisy na turnieje",
+  tournament_extras: "Opłaty dodatkowe turniejów",
+  billing_mode_changes: "Zmiany trybu rozliczeń",
+  training_coach_votes: "Głosy na trenera",
+  training_mvp_votes: "Głosy MVP",
+  auth_users: "Konta logowania",
+};
+
+/** Kopia zapasowa: mail z załącznikiem JSON ze wszystkimi danymi. */
+function renderBackup(r: Row): { subject: string; html: string; filename: string; json: string } {
+  const snap = (r.payload.snapshot ?? {}) as { created_at?: string; tables?: Record<string, unknown[]> };
+  const d = new Date(snap.created_at ?? Date.now());
+  const date = d.toLocaleDateString("pl-PL", { timeZone: "Europe/Warsaw", weekday: "short", day: "2-digit", month: "2-digit", year: "numeric" });
+  const iso = d.toLocaleDateString("sv-SE", { timeZone: "Europe/Warsaw" });
+  const tables = snap.tables ?? {};
+  const rows = Object.entries(tables)
+    .filter(([k]) => TABLE_LABEL[k])
+    .map(
+      ([k, v]) =>
+        `<tr><td style="padding:4px 0;font-size:14px">${esc(TABLE_LABEL[k])}</td><td style="padding:4px 0;text-align:right;font-weight:bold">${Array.isArray(v) ? v.length : 0}</td></tr>`,
+    )
+    .join("");
+  const json = JSON.stringify(snap);
+  return {
+    subject: `Kopia zapasowa Klubowicza – ${date}`,
+    filename: `klubowicz-kopia-${iso}.json`,
+    json,
+    html: layout(
+      "Kopia zapasowa danych",
+      `<p style="margin:0 0 10px">W załączniku jest pełna kopia danych aplikacji z ${esc(date)} (${Math.round(json.length / 1024)} KB).
+       Zachowaj tego maila – w razie awarii dane można z niego odtworzyć.</p>
+       <table style="width:100%;border-collapse:collapse">${rows}</table>
+       <p style="margin:12px 0 0;font-size:12px;color:#94a3b8">Kopia wysyłana automatycznie w poniedziałki i czwartki wieczorem. Plik zawiera dane osobowe (imiona, e-maile, salda) – nie przekazuj go dalej.</p>`,
+    ),
+  };
 }
 
 /** Jeden mail na osobę z obciążeniami z jednej operacji (np. rozliczenie treningu, zamknięcie zapisów turnieju). */
@@ -161,7 +207,12 @@ Deno.serve(async (req) => {
     const ids = g.map((r) => r.id);
     try {
       let msg: { subject: string; html: string };
-      if (g[0].kind === "charge") {
+      let attachments: { filename: string; content: string; contentType: string }[] | undefined;
+      if (g[0].kind === "backup") {
+        const b = renderBackup(g[0]);
+        msg = b;
+        attachments = [{ filename: b.filename, content: b.json, contentType: "application/json" }];
+      } else if (g[0].kind === "charge") {
         const { data: bal } = await supabase.rpc("_member_balance", { p_club: g[0].club_id, p_user: g[0].user_id });
         msg = renderCharges(g, Number(bal ?? 0));
       } else {
@@ -173,8 +224,16 @@ Deno.serve(async (req) => {
         subject: msg.subject,
         text: "Ta wiadomość wymaga programu pocztowego obsługującego HTML.",
         html: msg.html,
+        attachments,
       });
-      await supabase.from("notification_outbox").update({ sent_at: new Date().toISOString(), last_error: null }).in("id", ids);
+      await supabase
+        .from("notification_outbox")
+        .update({
+          sent_at: new Date().toISOString(),
+          last_error: null,
+          ...(g[0].kind === "backup" ? { payload: { sent: true } } : {}),
+        })
+        .in("id", ids);
       sent += 1;
     } catch (e) {
       await supabase

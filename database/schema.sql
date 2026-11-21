@@ -3339,6 +3339,61 @@ end $$;
 revoke all on function public.member_public_profile(uuid, uuid) from public, anon;
 grant execute on function public.member_public_profile(uuid, uuid) to authenticated;
 
+-- ============ Kopia zapasowa e-mailem (pn i czw 22:00 UTC) ============
+-- Kopia zapasowa danych: w poniedziałki i czwartki wieczorem wysyłana mailem do Superadmina (załącznik JSON)
+alter table public.notification_outbox drop constraint if exists notification_outbox_kind_check;
+alter table public.notification_outbox add constraint notification_outbox_kind_check
+  check (kind in ('new_member', 'charge', 'backup'));
+
+create or replace function public._backup_snapshot()
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare
+  v    jsonb := '{}'::jsonb;
+  t    text;
+  rows jsonb;
+begin
+  foreach t in array array['profiles', 'clubs', 'club_members', 'trainings', 'training_signups', 'training_attendance',
+                           'transactions', 'billing_mode_changes', 'tournaments', 'tournament_signups', 'tournament_extras',
+                           'training_coach_votes', 'training_mvp_votes', 'platform_subscriptions', 'platform_invoices',
+                           'platform_settings']
+  loop
+    if to_regclass('public.' || t) is not null then
+      execute format('select coalesce(jsonb_agg(to_jsonb(x)), ''[]''::jsonb) from public.%I x', t) into rows;
+      v := v || jsonb_build_object(t, rows);
+    end if;
+  end loop;
+  v := v || jsonb_build_object('auth_users',
+         (select coalesce(jsonb_agg(jsonb_build_object('id', u.id, 'email', u.email, 'created_at', u.created_at,
+                                                       'last_sign_in_at', u.last_sign_in_at)), '[]'::jsonb)
+          from auth.users u));
+  return jsonb_build_object('created_at', now(), 'version', 1, 'tables', v);
+end $$;
+
+create or replace function public._queue_backup()
+returns integer language plpgsql volatile security definer set search_path = public as $$
+declare
+  v_snap jsonb := public._backup_snapshot();
+  v_n    integer;
+begin
+  insert into public.notification_outbox (to_email, kind, payload)
+  select p.email, 'backup', jsonb_build_object('snapshot', v_snap)
+  from public.profiles p
+  where p.is_superadmin and p.email is not null;
+  get diagnostics v_n = row_count;
+  perform public._kick_mailer();
+  return v_n;
+end $$;
+
+revoke all on function public._backup_snapshot() from public, anon, authenticated;
+revoke all on function public._queue_backup() from public, anon, authenticated;
+
+-- poniedziałek i czwartek, 22:00 UTC (23:00 zimą / północ latem w Polsce)
+do $$
+begin
+  perform cron.unschedule(jobid) from cron.job where jobname = 'klubowicz-backup';
+  perform cron.schedule('klubowicz-backup', '0 22 * * 1,4', 'select public._queue_backup()');
+end $$;
+
 -- Harmonogram: 1. dnia miesiąca o 05:00 UTC (06:00 zimą / 07:00 latem w Polsce)
 do $$
 begin
