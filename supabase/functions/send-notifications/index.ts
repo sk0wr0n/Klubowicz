@@ -4,7 +4,7 @@
 // Wymagane sekrety: SMTP_PASSWORD (hasło aplikacji Gmail). Opcjonalnie SMTP_USER, SMTP_HOST, SMTP_PORT, APP_URL.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
+import nodemailer from "npm:nodemailer@6.9.16";
 
 const APP_URL = Deno.env.get("APP_URL") ?? "https://klubowicz.pages.dev";
 const SMTP_USER = Deno.env.get("SMTP_USER") ?? "januszagentai@gmail.com";
@@ -134,8 +134,11 @@ Deno.serve(async (req) => {
   if (error) return new Response(error.message, { status: 500 });
   if (!rows?.length) return new Response(JSON.stringify({ sent: 0 }), { headers: { "Content-Type": "application/json" } });
 
-  const client = new SMTPClient({
-    connection: { hostname: SMTP_HOST, port: SMTP_PORT, tls: true, auth: { username: SMTP_USER, password: SMTP_PASSWORD } },
+  const transporter = nodemailer.createTransport({
+    host: SMTP_HOST,
+    port: SMTP_PORT,
+    secure: SMTP_PORT === 465,
+    auth: { user: SMTP_USER, pass: SMTP_PASSWORD },
   });
 
   // grupy: każda wiadomość „new_member” osobno, obciążenia razem per osoba i klub
@@ -164,11 +167,11 @@ Deno.serve(async (req) => {
       } else {
         msg = render(g[0]);
       }
-      await client.send({
-        from: `Klubowicz <${SMTP_USER}>`,
+      await transporter.sendMail({
+        from: { name: "Klubowicz", address: SMTP_USER },
         to: g[0].to_email,
         subject: msg.subject,
-        content: "Ta wiadomość wymaga programu pocztowego obsługującego HTML.",
+        text: "Ta wiadomość wymaga programu pocztowego obsługującego HTML.",
         html: msg.html,
       });
       await supabase.from("notification_outbox").update({ sent_at: new Date().toISOString(), last_error: null }).in("id", ids);
@@ -181,7 +184,7 @@ Deno.serve(async (req) => {
     }
   }
   try {
-    await client.close();
+    transporter.close();
   } catch {
     /* */
   }
