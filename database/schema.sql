@@ -2856,6 +2856,130 @@ begin
   perform cron.schedule('klubowicz-mailer', '*/10 * * * *', 'select public._kick_mailer()');
 end $$;
 
+-- Powiadomienia tylko „gdy coś się dzieje” (bez codziennych/tygodniowych podsumowań):
+--  * Właściciel: nowa prośba o dołączenie
+--  * Zawodnik: naliczono mu opłatę (trening, składka, wpisowe, opłata dodatkowa…) – z saldem
+--    i danymi do przelewu, gdy saldo jest ujemne. Obciążenia z jednej operacji idą w jednym mailu.
+do $$
+begin
+  perform cron.unschedule(jobid) from cron.job where jobname in ('klubowicz-charge-digest', 'klubowicz-debt-reminder');
+end $$;
+drop function if exists public._queue_charge_digests();
+drop function if exists public._queue_debt_reminders();
+
+alter table public.notification_outbox drop constraint if exists notification_outbox_kind_check;
+alter table public.notification_outbox add constraint notification_outbox_kind_check
+  check (kind in ('new_member', 'charge'));
+alter table public.notification_outbox add column if not exists claimed_at timestamptz;
+
+-- Każde nowe obciążenie → wiadomość w kolejce
+create or replace function public._notify_charge()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare r record;
+begin
+  if new.amount >= 0 then return null; end if;
+  select p.email, p.full_name, p.email_notifications, m.member_code, m.status,
+         c.name as club_name, c.bank_account, c.bank_recipient
+    into r
+  from public.profiles p
+  join public.club_members m on m.user_id = p.id and m.club_id = new.club_id
+  join public.clubs c on c.id = new.club_id
+  where p.id = new.user_id;
+  if not found or r.email is null or not r.email_notifications or r.status <> 'active' then return null; end if;
+  insert into public.notification_outbox (club_id, user_id, to_email, kind, payload)
+  values (new.club_id, new.user_id, r.email, 'charge', jsonb_build_object(
+    'tx_id', new.id,
+    'club_id', new.club_id,
+    'club_name', r.club_name,
+    'name', r.full_name,
+    'date', new.booked_at,
+    'description', new.description,
+    'type', new.type,
+    'amount', -new.amount,
+    'bank_account', r.bank_account,
+    'bank_recipient', r.bank_recipient,
+    'transfer_title', trim(coalesce(r.member_code, '') || ' ' || coalesce(r.full_name, '')) || ' - składka za wynajem sali gimnastycznej'
+  ));
+  return null;
+end $$;
+
+create or replace function public._kick_mailer_trigger()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  perform public._kick_mailer();
+  return null;
+end $$;
+
+drop trigger if exists transactions_notify_charge on public.transactions;
+create trigger transactions_notify_charge
+  after insert on public.transactions
+  for each row execute function public._notify_charge();
+
+-- jedno „szturchnięcie” wysyłki na całą operację (np. rozliczenie treningu dla 20 osób)
+drop trigger if exists transactions_kick_mailer on public.transactions;
+create trigger transactions_kick_mailer
+  after insert on public.transactions
+  for each statement execute function public._kick_mailer_trigger();
+
+-- Pobranie paczki do wysyłki (bez dublowania przy równoległych wywołaniach).
+-- Funkcja wysyłająca czeka chwilę przed pobraniem, żeby obciążenia z jednej operacji trafiły do jednego maila.
+create or replace function public._claim_outbox(p_limit integer default 40)
+returns setof public.notification_outbox
+language plpgsql volatile security definer set search_path = public as $$
+begin
+  return query
+  update public.notification_outbox o
+  set claimed_at = now(), attempts = o.attempts + 1
+  where o.id in (
+    select id from public.notification_outbox
+    where sent_at is null and attempts < 5
+      and (claimed_at is null or claimed_at < now() - interval '5 minutes')
+    order by created_at
+    limit p_limit
+    for update skip locked
+  )
+  returning o.*;
+end $$;
+
+create or replace function public._member_balance(p_club uuid, p_user uuid)
+returns numeric language sql stable security definer set search_path = public as $$
+  select coalesce(sum(amount), 0) from public.transactions where club_id = p_club and user_id = p_user;
+$$;
+
+-- _kick_mailer: wysyłka gdy w kolejce coś czeka (także ponowienia po błędzie)
+create or replace function public._kick_mailer()
+returns void language plpgsql volatile security definer set search_path = public as $$
+declare v_secret text;
+begin
+  if not exists (select 1 from public.notification_outbox where sent_at is null and attempts < 5) then
+    return;
+  end if;
+  select decrypted_secret into v_secret from vault.decrypted_secrets where name = 'klubowicz_cron_secret';
+  perform net.http_post(
+    url := 'https://yjvzwakzsiobjujqrwwr.supabase.co/functions/v1/send-notifications',
+    headers := jsonb_build_object('Content-Type', 'application/json', 'x-cron-secret', v_secret),
+    body := '{}'::jsonb,
+    timeout_milliseconds := 30000
+  );
+exception when others then
+  null;
+end $$;
+
+revoke all on function public._notify_charge() from public, anon, authenticated;
+revoke all on function public._kick_mailer_trigger() from public, anon, authenticated;
+revoke all on function public._claim_outbox(integer) from public, anon, authenticated;
+revoke all on function public._member_balance(uuid, uuid) from public, anon, authenticated;
+revoke all on function public._kick_mailer() from public, anon, authenticated;
+grant execute on function public._claim_outbox(integer) to service_role;
+grant execute on function public._member_balance(uuid, uuid) to service_role;
+
+-- ponawianie (np. gdy Gmail chwilowo odrzuci) co 10 minut
+do $$
+begin
+  perform cron.unschedule(jobid) from cron.job where jobname = 'klubowicz-mailer';
+  perform cron.schedule('klubowicz-mailer', '*/10 * * * *', 'select public._kick_mailer()');
+end $$;
+
 -- Harmonogram: 1. dnia miesiąca o 05:00 UTC (06:00 zimą / 07:00 latem w Polsce)
 do $$
 begin

@@ -106,8 +106,8 @@ function NotificationsSection() {
             <Bell className="h-5 w-5 text-indigo-600" /> Powiadomienia e-mail
           </h2>
           <p className="mt-1 text-xs text-slate-500">
-            Wieczorne zestawienie nowych obciążeń, przypomnienie w poniedziałek przy ujemnym saldzie, a dla Właściciela –
-            informacja o nowych osobach chcących dołączyć.
+            Mail tylko wtedy, gdy coś się dzieje: naliczono Ci opłatę (z saldem i danymi do przelewu, gdy jest minus), a dla
+            Właściciela – gdy ktoś chce dołączyć do klubu.
           </p>
         </div>
         <button

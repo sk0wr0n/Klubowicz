@@ -1,5 +1,6 @@
 // Klubowicz – wysyłka powiadomień e-mail z kolejki public.notification_outbox.
 // Wywoływana przez pg_cron/pg_net z nagłówkiem x-cron-secret (sprawdzanym w bazie).
+// Wysyła: nową prośbę o dołączenie (do Właściciela) i nowe obciążenia (do zawodnika, zgrupowane per operacja).
 // Wymagane sekrety: SMTP_PASSWORD (hasło aplikacji Gmail). Opcjonalnie SMTP_USER, SMTP_HOST, SMTP_PORT, APP_URL.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
@@ -14,7 +15,9 @@ const SMTP_PASSWORD = Deno.env.get("SMTP_PASSWORD") ?? "";
 type Row = {
   id: number;
   to_email: string;
-  kind: "new_member" | "charges" | "debt";
+  kind: "new_member" | "charge";
+  club_id: string | null;
+  user_id: string | null;
   payload: Record<string, unknown>;
   attempts: number;
 };
@@ -76,41 +79,34 @@ function render(r: Row): { subject: string; html: string } {
       ),
     };
   }
-  if (r.kind === "charges") {
-    const items = (p.items as { date: string; description: string; amount: number }[]) ?? [];
-    const sum = items.reduce((s, i) => s + Number(i.amount), 0);
-    const bal = Number(p.balance ?? 0);
-    const rows = items
-      .map(
-        (i) =>
-          `<tr><td style="padding:6px 0;border-bottom:1px solid #f1f5f9;font-size:14px">${esc(i.description)}<br><span style="color:#94a3b8;font-size:12px">${plDate(i.date)}</span></td><td style="padding:6px 0;border-bottom:1px solid #f1f5f9;text-align:right;color:#dc2626;font-weight:bold;white-space:nowrap">−${zl(i.amount)}</td></tr>`,
-      )
-      .join("");
-    return {
-      subject: `Nowe obciążenia na Twoim koncie: −${zl(sum)} (${p.club_name})`,
-      html: layout(
-        "Nowe obciążenia na Twoim koncie",
-        `<p style="margin:0 0 10px">Cześć${p.name ? ` ${esc(String(p.name).split(" ")[0])}` : ""}! W klubie <b>${esc(p.club_name)}</b> naliczono:</p>
-         <table style="width:100%;border-collapse:collapse">${rows}</table>
-         <p style="margin:12px 0 0;font-size:15px">Saldo po naliczeniu: <b style="color:${bal < 0 ? "#dc2626" : "#059669"}">${zl(bal)}</b></p>
-         ${bal < 0 ? bankBox(p, -bal) : `<p style="margin:8px 0 0;font-size:14px;color:#475569">Masz nadpłatę – nic nie musisz robić. 👍</p>`}`,
-        { href: `${APP_URL}/club/finance/?id=${encodeURIComponent(String(p.club_id ?? ""))}`, label: "Zobacz finanse" },
-      ),
-    };
-  }
-  // debt
-  const bal = Number(p.balance ?? 0);
-  const days = p.days_overdue != null ? Number(p.days_overdue) : null;
+  return { subject: "", html: "" };
+}
+
+/** Jeden mail na osobę z obciążeniami z jednej operacji (np. rozliczenie treningu, zamknięcie zapisów turnieju). */
+function renderCharges(rows: Row[], balance: number): { subject: string; html: string } {
+  const p = rows[0].payload;
+  const items = rows.map((r) => r.payload);
+  const sum = items.reduce((s, i) => s + Number(i.amount), 0);
+  const list = items
+    .map(
+      (i) =>
+        `<tr><td style="padding:6px 0;border-bottom:1px solid #f1f5f9;font-size:14px">${esc(i.description)}<br><span style="color:#94a3b8;font-size:12px">${plDate(i.date)}</span></td><td style="padding:6px 0;border-bottom:1px solid #f1f5f9;text-align:right;color:#dc2626;font-weight:bold;white-space:nowrap">−${zl(i.amount)}</td></tr>`,
+    )
+    .join("");
+  const first = p.name ? ` ${esc(String(p.name).split(" ")[0])}` : "";
+  const what = items.length === 1 ? String(items[0].description ?? "opłata") : `${items.length} pozycje`;
   return {
-    subject: `Przypomnienie: saldo ${zl(bal)} w klubie ${p.club_name}`,
+    subject: balance < 0 ? `Naliczono −${zl(sum)}: ${what} · saldo ${zl(balance)}` : `Naliczono −${zl(sum)}: ${what}`,
     html: layout(
-      "Przypomnienie o płatności",
-      `<p style="margin:0 0 10px">Cześć${p.name ? ` ${esc(String(p.name).split(" ")[0])}` : ""}! Twoje saldo w klubie <b>${esc(p.club_name)}</b> jest ujemne:</p>
-       <p style="font-size:28px;font-weight:bold;color:#dc2626;margin:4px 0 8px">${zl(bal)}</p>
-       ${days != null && days > 0 ? `<p style="margin:0 0 6px;font-size:14px;color:#475569">Najstarsza nieopłacona pozycja jest z ${plDate(p.oldest_unpaid)} (${days} dni temu).</p>` : ""}
-       <p style="margin:0;font-size:14px">Prosimy o wpłatę – dzięki temu możemy opłacać salę i turnieje na czas. 🙏</p>
-       ${bankBox(p, -bal)}
-       <p style="margin:12px 0 0;font-size:12px;color:#94a3b8">Jeśli przelew jest już w drodze – dziękujemy! Saldo zaktualizuje się po zaksięgowaniu.</p>`,
+      items.length === 1 ? "Nowe obciążenie na Twoim koncie" : "Nowe obciążenia na Twoim koncie",
+      `<p style="margin:0 0 10px">Cześć${first}! W klubie <b>${esc(p.club_name)}</b> naliczono:</p>
+       <table style="width:100%;border-collapse:collapse">${list}</table>
+       <p style="margin:12px 0 0;font-size:15px">Twoje saldo: <b style="color:${balance < 0 ? "#dc2626" : "#059669"}">${zl(balance)}</b></p>
+       ${
+         balance < 0
+           ? `<p style="margin:6px 0 0;font-size:14px">Do zapłaty: <b>${zl(-balance)}</b> – prosimy o wpłatę. 🙏</p>${bankBox(p, -balance)}`
+           : `<p style="margin:8px 0 0;font-size:14px;color:#475569">Masz nadpłatę – nic nie musisz robić. 👍</p>`
+       }`,
       { href: `${APP_URL}/club/finance/?id=${encodeURIComponent(String(p.club_id ?? ""))}`, label: "Zobacz finanse" },
     ),
   };
@@ -132,13 +128,9 @@ Deno.serve(async (req) => {
     });
   }
 
-  const { data: rows, error } = await supabase
-    .from("notification_outbox")
-    .select("id, to_email, kind, payload, attempts")
-    .is("sent_at", null)
-    .lt("attempts", 5)
-    .order("created_at")
-    .limit(40);
+  // chwila na zatwierdzenie całej operacji – obciążenia z niej trafią do jednego maila
+  await new Promise((r) => setTimeout(r, 3000));
+  const { data: rows, error } = await supabase.rpc("_claim_outbox", { p_limit: 60 });
   if (error) return new Response(error.message, { status: 500 });
   if (!rows?.length) return new Response(JSON.stringify({ sent: 0 }), { headers: { "Content-Type": "application/json" } });
 
@@ -146,24 +138,46 @@ Deno.serve(async (req) => {
     connection: { hostname: SMTP_HOST, port: SMTP_PORT, tls: true, auth: { username: SMTP_USER, password: SMTP_PASSWORD } },
   });
 
-  let sent = 0;
+  // grupy: każda wiadomość „new_member” osobno, obciążenia razem per osoba i klub
+  const groups: Row[][] = [];
+  const byKey = new Map<string, Row[]>();
   for (const r of rows as Row[]) {
+    if (r.kind === "charge") {
+      const k = `${r.to_email}|${r.club_id}`;
+      if (!byKey.has(k)) {
+        const g: Row[] = [];
+        byKey.set(k, g);
+        groups.push(g);
+      }
+      byKey.get(k)!.push(r);
+    } else groups.push([r]);
+  }
+
+  let sent = 0;
+  for (const g of groups) {
+    const ids = g.map((r) => r.id);
     try {
-      const { subject, html } = render(r);
+      let msg: { subject: string; html: string };
+      if (g[0].kind === "charge") {
+        const { data: bal } = await supabase.rpc("_member_balance", { p_club: g[0].club_id, p_user: g[0].user_id });
+        msg = renderCharges(g, Number(bal ?? 0));
+      } else {
+        msg = render(g[0]);
+      }
       await client.send({
         from: `Klubowicz <${SMTP_USER}>`,
-        to: r.to_email,
-        subject,
+        to: g[0].to_email,
+        subject: msg.subject,
         content: "Ta wiadomość wymaga programu pocztowego obsługującego HTML.",
-        html,
+        html: msg.html,
       });
-      await supabase.from("notification_outbox").update({ sent_at: new Date().toISOString(), attempts: r.attempts + 1, last_error: null }).eq("id", r.id);
-      sent++;
+      await supabase.from("notification_outbox").update({ sent_at: new Date().toISOString(), last_error: null }).in("id", ids);
+      sent += 1;
     } catch (e) {
       await supabase
         .from("notification_outbox")
-        .update({ attempts: r.attempts + 1, last_error: String(e instanceof Error ? e.message : e).slice(0, 500) })
-        .eq("id", r.id);
+        .update({ claimed_at: null, last_error: String(e instanceof Error ? e.message : e).slice(0, 500) })
+        .in("id", ids);
     }
   }
   try {
@@ -171,5 +185,5 @@ Deno.serve(async (req) => {
   } catch {
     /* */
   }
-  return new Response(JSON.stringify({ sent, total: rows.length }), { headers: { "Content-Type": "application/json" } });
+  return new Response(JSON.stringify({ sent, rows: rows.length }), { headers: { "Content-Type": "application/json" } });
 });
