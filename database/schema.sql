@@ -511,6 +511,18 @@ create table if not exists public.training_coach_votes (
 );
 create index if not exists training_coach_votes_candidate_idx on public.training_coach_votes (training_id, candidate_id);
 
+-- Głosowanie na MVP treningu (po rozpoczęciu, do 7 dni)
+create table if not exists public.training_mvp_votes (
+  training_id  uuid not null references public.trainings (id) on delete cascade,
+  club_id      uuid not null references public.clubs (id) on delete cascade,
+  voter_id     uuid not null references public.profiles (id) on delete cascade,
+  candidate_id uuid not null references public.profiles (id) on delete cascade,
+  voted_at     timestamptz not null default now(),
+  primary key (training_id, voter_id),
+  check (voter_id <> candidate_id)
+);
+create index if not exists training_mvp_votes_candidate_idx on public.training_mvp_votes (training_id, candidate_id);
+
 -- Historia zmian trybu rozliczeń (abonament / za trening) – zapisywana automatycznie
 create table if not exists public.billing_mode_changes (
   id         uuid primary key default gen_random_uuid(),
@@ -558,6 +570,12 @@ alter table public.platform_invoices      enable row level security;
 alter table public.platform_settings      enable row level security;
 alter table public.billing_mode_changes   enable row level security;
 alter table public.training_coach_votes   enable row level security;
+alter table public.training_mvp_votes     enable row level security;
+
+-- TRAINING_MVP_VOTES: każdy widzi tylko swój głos; wyniki przez RPC mvp_votes
+drop policy if exists training_mvp_votes_select on public.training_mvp_votes;
+create policy training_mvp_votes_select on public.training_mvp_votes for select to authenticated
+  using (voter_id = auth.uid());
 
 -- TRAINING_COACH_VOTES: każdy widzi tylko swój głos; wyniki (bez nazwisk głosujących) przez RPC coach_votes
 drop policy if exists training_coach_votes_select on public.training_coach_votes;
@@ -1064,6 +1082,69 @@ begin
     order by count(*) desc;
 end $$;
 
+-- Kto „był na treningu”: po sprawdzeniu obecności – obecni; wcześniej – lista główna
+create or replace function public._mvp_eligible(p_training uuid, p_user uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select case
+    when exists (select 1 from public.training_attendance a where a.training_id = p_training)
+      then exists (select 1 from public.training_attendance a
+                   where a.training_id = p_training and a.user_id = p_user and a.present)
+    else exists (select 1 from public.training_signups s
+                 where s.training_id = p_training and s.user_id = p_user and s.status = 'main')
+  end;
+$$;
+
+create or replace function public.vote_mvp(p_training uuid, p_candidate uuid)
+returns void language plpgsql volatile security definer set search_path = public as $$
+declare
+  v_uid uuid := public._require_uid();
+  t     public.trainings%rowtype;
+begin
+  select * into t from public.trainings where id = p_training;
+  if not found then raise exception 'Trening nie istnieje.'; end if;
+  if not public.is_club_member(t.club_id) then
+    raise exception 'Nie jesteś aktywnym członkiem tego klubu.' using errcode = '42501';
+  end if;
+  if t.status = 'cancelled' then raise exception 'Trening został odwołany.'; end if;
+  if t.starts_at > now() then raise exception 'Głosowanie na MVP otwiera się po rozpoczęciu treningu.'; end if;
+  if now() > t.starts_at + interval '7 days' then raise exception 'Głosowanie na MVP jest już zamknięte.'; end if;
+  if not public._mvp_eligible(p_training, v_uid) then
+    raise exception 'Na MVP mogą głosować tylko osoby, które były na treningu.';
+  end if;
+  if p_candidate is null then
+    delete from public.training_mvp_votes where training_id = p_training and voter_id = v_uid;
+    return;
+  end if;
+  if p_candidate = v_uid then raise exception 'Nie można głosować na siebie.'; end if;
+  if not public._mvp_eligible(p_training, p_candidate) then
+    raise exception 'Można głosować tylko na osoby, które były na treningu.';
+  end if;
+  insert into public.training_mvp_votes (training_id, club_id, voter_id, candidate_id)
+  values (p_training, t.club_id, v_uid, p_candidate)
+  on conflict (training_id, voter_id) do update set candidate_id = excluded.candidate_id, voted_at = now();
+end $$;
+
+create or replace function public.mvp_votes(p_training uuid)
+returns table (candidate_id uuid, votes integer, is_my_vote boolean)
+language plpgsql stable security definer set search_path = public as $$
+declare
+  v_uid  uuid := public._require_uid();
+  v_club uuid;
+begin
+  select club_id into v_club from public.trainings where id = p_training;
+  if v_club is null or not (public.is_club_member(v_club) or public.is_superadmin()) then
+    raise exception 'Nie masz dostępu do tego treningu.' using errcode = '42501';
+  end if;
+  return query
+    select v.candidate_id, count(*)::int, bool_or(v.voter_id = v_uid)
+    from public.training_mvp_votes v
+    where v.training_id = p_training
+      and public._mvp_eligible(p_training, v.candidate_id)
+      and public._mvp_eligible(p_training, v.voter_id)
+    group by v.candidate_id
+    order by count(*) desc;
+end $$;
+
 -- ---------- Treningi: zapisy ----------
 
 create or replace function public.join_training(p_training uuid)
@@ -1317,11 +1398,41 @@ begin
     left join public.training_signups s on s.training_id = a.training_id and s.user_id = a.user_id
     where a.club_id = p_club and a.present and (p_from is null or t.starts_at >= p_from)
   ),
+  coach_tally as (
+    select v.training_id, v.candidate_id, count(*) as n
+    from public.training_coach_votes v
+    join public.trainings t on t.id = v.training_id
+    join public.training_signups c on c.training_id = v.training_id and c.user_id = v.candidate_id and c.status = 'main'
+    join public.training_signups s on s.training_id = v.training_id and s.user_id = v.voter_id and s.status in ('main', 'reserve')
+    where v.club_id = p_club and t.status <> 'cancelled' and t.starts_at <= now()
+      and (p_from is null or t.starts_at >= p_from)
+    group by v.training_id, v.candidate_id
+  ),
+  coach_wins as (
+    select x.candidate_id as user_id from coach_tally x
+    where x.n = (select max(y.n) from coach_tally y where y.training_id = x.training_id)
+  ),
+  mvp_tally as (
+    select v.training_id, v.candidate_id, count(*) as n
+    from public.training_mvp_votes v
+    join public.trainings t on t.id = v.training_id
+    where v.club_id = p_club and t.status <> 'cancelled'
+      and (p_from is null or t.starts_at >= p_from)
+      and public._mvp_eligible(v.training_id, v.candidate_id)
+      and public._mvp_eligible(v.training_id, v.voter_id)
+    group by v.training_id, v.candidate_id
+  ),
+  mvp_wins as (
+    select x.candidate_id as user_id from mvp_tally x
+    where x.n = (select max(y.n) from mvp_tally y where y.training_id = x.training_id)
+  ),
   base as (
     select m.user_id, p.full_name, m.member_code,
            (select count(*) from present x where x.user_id = m.user_id)::int as visits,
            (select count(*) from present x where x.user_id = m.user_id and x.has_car)::int as cars,
            (select count(*) from present x where x.user_id = m.user_id and x.wants_beer)::int as beers,
+           (select count(*) from coach_wins w where w.user_id = m.user_id)::int as coach,
+           (select count(*) from mvp_wins w where w.user_id = m.user_id)::int as mvp,
            coalesce((select sum(t.amount) from public.transactions t
                      where t.club_id = p_club and t.user_id = m.user_id), 0)::numeric as balance
     from public.club_members m
@@ -1333,7 +1444,9 @@ begin
            rank() over (order by b.visits desc)  as r_visits,
            rank() over (order by b.cars desc)    as r_cars,
            rank() over (order by b.beers desc)   as r_beers,
-           rank() over (order by b.balance desc) as r_balance
+           rank() over (order by b.balance desc) as r_balance,
+           rank() over (order by b.coach desc)   as r_coach,
+           rank() over (order by b.mvp desc)     as r_mvp
     from base b
   )
   select jsonb_build_object(
@@ -1346,11 +1459,18 @@ begin
     'beers', coalesce((select jsonb_agg(jsonb_build_object('user_id', x.user_id, 'full_name', x.full_name,
                  'member_code', x.member_code, 'value', x.beers, 'rank', x.r_beers) order by x.r_beers, x.full_name)
                from (select * from ranked where beers > 0 order by r_beers, full_name limit 10) x), '[]'::jsonb),
+    'coach', coalesce((select jsonb_agg(jsonb_build_object('user_id', x.user_id, 'full_name', x.full_name,
+                 'member_code', x.member_code, 'value', x.coach, 'rank', x.r_coach) order by x.r_coach, x.full_name)
+               from (select * from ranked where coach > 0 order by r_coach, full_name limit 10) x), '[]'::jsonb),
+    'mvp', coalesce((select jsonb_agg(jsonb_build_object('user_id', x.user_id, 'full_name', x.full_name,
+                 'member_code', x.member_code, 'value', x.mvp, 'rank', x.r_mvp) order by x.r_mvp, x.full_name)
+               from (select * from ranked where mvp > 0 order by r_mvp, full_name limit 10) x), '[]'::jsonb),
     'balance', coalesce((select jsonb_agg(jsonb_build_object('user_id', x.user_id, 'full_name', x.full_name,
                  'member_code', x.member_code, 'value', x.balance, 'rank', x.r_balance) order by x.r_balance, x.full_name)
                from (select * from ranked where balance > 0 order by r_balance, full_name limit 10) x), '[]'::jsonb),
     'me', (select jsonb_build_object('visits', r.visits, 'cars', r.cars, 'beers', r.beers, 'balance', r.balance,
-                  'r_visits', r.r_visits, 'r_cars', r.r_cars, 'r_beers', r.r_beers, 'r_balance', r.r_balance)
+                  'r_visits', r.r_visits, 'r_cars', r.r_cars, 'r_beers', r.r_beers, 'r_balance', r.r_balance,
+                  'coach', r.coach, 'mvp', r.mvp, 'r_coach', r.r_coach, 'r_mvp', r.r_mvp)
            from ranked r where r.user_id = v_uid),
     'members', (select count(*) from base),
     'trainings', (select count(*) from public.trainings t
@@ -1779,6 +1899,7 @@ grant select on public.platform_subscriptions to authenticated;
 grant select on public.platform_invoices to authenticated;
 grant select on public.platform_settings to authenticated;
 grant select on public.billing_mode_changes to authenticated;
+grant select on public.training_mvp_votes to authenticated;
 grant select on public.training_coach_votes to authenticated;
 grant update (platform_name, bank_account, bank_recipient, contact_email, updated_at) on public.platform_settings to authenticated;
 
@@ -1797,6 +1918,8 @@ grant execute on function public.join_club_by_code(text, text, text) to authenti
 grant execute on function public.set_my_position(uuid, text) to authenticated;
 grant execute on function public.vote_coach(uuid, uuid) to authenticated;
 grant execute on function public.coach_votes(uuid) to authenticated;
+grant execute on function public.vote_mvp(uuid, uuid) to authenticated;
+grant execute on function public.mvp_votes(uuid) to authenticated;
 grant execute on function public.set_member_position(uuid, text) to authenticated;
 grant execute on function public.set_my_billing_mode(uuid, text) to authenticated;
 grant execute on function public.club_context(uuid) to authenticated;

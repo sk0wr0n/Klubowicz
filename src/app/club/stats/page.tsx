@@ -22,6 +22,8 @@ interface ClubStats {
   visits: StatRow[];
   cars: StatRow[];
   beers: StatRow[];
+  coach?: StatRow[];
+  mvp?: StatRow[];
   balance: StatRow[];
   me: {
     visits: number;
@@ -32,6 +34,10 @@ interface ClubStats {
     r_cars: number;
     r_beers: number;
     r_balance: number;
+    coach?: number;
+    mvp?: number;
+    r_coach?: number;
+    r_mvp?: number;
   } | null;
   members: number;
   trainings: number;
@@ -180,6 +186,16 @@ export default function StatsPage() {
                   <p className="text-[11px] text-slate-500">🍺 integracji</p>
                 </div>
               </div>
+              <div className="mt-2 grid grid-cols-2 gap-2 text-center">
+                <div className="rounded-xl bg-white p-2">
+                  <p className="text-xl font-bold text-amber-500">{me.mvp ?? 0}</p>
+                  <p className="text-[11px] text-slate-500">⭐ razy MVP</p>
+                </div>
+                <div className="rounded-xl bg-white p-2">
+                  <p className="text-xl font-bold text-indigo-700">{me.coach ?? 0}</p>
+                  <p className="text-[11px] text-slate-500">📣 razy trenerem</p>
+                </div>
+              </div>
             </div>
           )}
 
@@ -214,6 +230,26 @@ export default function StatsPage() {
             empty="Jeszcze nikt nie został na integracji."
           />
           <Leaderboard
+            emoji="⭐"
+            title="Najczęściej MVP treningu"
+            rows={stats.mvp ?? []}
+            format={times}
+            userId={userId}
+            mine={me?.mvp}
+            myRank={me?.r_mvp}
+            empty="Nikt jeszcze nie został MVP – głosujcie po treningu!"
+          />
+          <Leaderboard
+            emoji="📣"
+            title="Najczęściej wybierany trenerem"
+            rows={stats.coach ?? []}
+            format={times}
+            userId={userId}
+            mine={me?.coach}
+            myRank={me?.r_coach}
+            empty="Brak rozstrzygniętych głosowań na trenera."
+          />
+          <Leaderboard
             emoji="💰"
             title="Najwyższe saldo"
             rows={stats.balance}
@@ -224,7 +260,7 @@ export default function StatsPage() {
             empty="Nikt nie ma jeszcze nadpłaty."
           />
           <p className="text-center text-xs text-slate-400">
-            Liczą się treningi, na których Opiekun zatwierdził obecność. Ranking salda pokazuje tylko nadpłaty (stan bieżący).
+            Liczą się treningi, na których Opiekun zatwierdził obecność. Ranking salda pokazuje tylko nadpłaty (stan bieżący). MVP i trener – liczy się zwycięstwo w głosowaniu (przy remisie wszyscy z najwyższą liczbą głosów).
           </p>
         </div>
       ) : null}

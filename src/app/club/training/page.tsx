@@ -51,6 +51,7 @@ export default function TrainingPage() {
   const [picker, setPicker] = useState<'list' | 'attendance' | null>(null);
   const [attMode, setAttMode] = useState(false);
   const [voteOpen, setVoteOpen] = useState(false);
+  const [mvpOpen, setMvpOpen] = useState(false);
   const [present, setPresent] = useState<Set<string>>(new Set());
   const [chargeLate, setChargeLate] = useState<Set<string>>(new Set());
 
@@ -413,6 +414,15 @@ export default function TrainingPage() {
         )}
       </div>
 
+      <CoachVote
+        kind="mvp"
+        training={training}
+        signups={signups}
+        attendance={attendance}
+        userId={userId}
+        open={mvpOpen}
+        onOpenChange={setMvpOpen}
+      />
       <CoachVote training={training} signups={signups} userId={userId} open={voteOpen} onOpenChange={setVoteOpen} />
 
       {/* Tryb sprawdzania obecności */}

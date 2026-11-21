@@ -125,6 +125,9 @@ export default function FinancePage() {
         </h2>
         {ctx.club.bank_account ? (
           <>
+            <p className="-mt-1 rounded-lg bg-indigo-50 px-3 py-2 text-xs text-indigo-800">
+              👆 Stuknij w pole (np. numer konta), a skopiuje się do schowka – potem wklej w aplikacji banku.
+            </p>
             {ctx.club.bank_recipient && <CopyField label="Odbiorca" value={ctx.club.bank_recipient} />}
             <CopyField label="Numer konta" value={ctx.club.bank_account} mono />
             <CopyField label="Tytuł przelewu (wymagany)" value={transferTitle} />
