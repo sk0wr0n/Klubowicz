@@ -1,10 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Check, ChevronDown, LayoutGrid, LogOut, ShieldCheck, Shirt, SquarePlus, User, Volleyball } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
-import { clubHref, setLastClub } from '@/lib/nav';
+import { clubHref, getLastClub, setLastClub } from '@/lib/nav';
 import { ROLE_LABEL } from '@/lib/types';
 import { Avatar } from './ui';
 import { openInstallHelp } from './InstallHelp';
@@ -16,23 +16,42 @@ export default function AppHeader({ clubId, clubName }: { clubId?: string; clubN
   const [userOpen, setUserOpen] = useState(false);
   const active = memberships.filter((m) => m.status === 'active');
   const canSwitch = active.length > 1 || Boolean(profile?.is_superadmin);
+  // logo prowadzi do ekranu głównego klubu (ostatnio otwartego, jeśli jesteśmy poza klubem)
+  const [homeHref, setHomeHref] = useState(clubId ? clubHref(clubId) : '/');
+  useEffect(() => {
+    if (clubId) {
+      setHomeHref(clubHref(clubId));
+      return;
+    }
+    const last = getLastClub();
+    setHomeHref(last && active.some((m) => m.club_id === last) ? clubHref(last) : '/');
+  }, [clubId, active]);
 
   return (
     <header className="pt-safe sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur">
       <div className="mx-auto flex h-14 max-w-3xl items-center justify-between gap-2 px-4">
-        <div className="relative min-w-0">
-          <button
-            className="flex min-w-0 items-center gap-2 rounded-xl px-1 py-1 text-left hover:bg-slate-50 disabled:hover:bg-transparent"
-            onClick={() => canSwitch && setClubOpen((v) => !v)}
-            disabled={!canSwitch}
-            aria-haspopup="menu"
+        <div className="relative flex min-w-0 items-center gap-1">
+          <Link
+            href={homeHref}
+            aria-label="Strona główna"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo-600 text-white shadow-sm transition active:scale-95"
           >
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-600 text-white">
-              <Volleyball className="h-5 w-5" />
-            </span>
-            <span className="truncate font-semibold text-slate-900">{clubName ?? 'Klubowicz'}</span>
-            {canSwitch && <ChevronDown className="h-4 w-4 shrink-0 text-slate-400" />}
-          </button>
+            <Volleyball className="h-5 w-5" />
+          </Link>
+          {canSwitch ? (
+            <button
+              className="flex min-w-0 items-center gap-1 rounded-xl px-1.5 py-1 text-left hover:bg-slate-50"
+              onClick={() => setClubOpen((v) => !v)}
+              aria-haspopup="menu"
+            >
+              <span className="truncate font-semibold text-slate-900">{clubName ?? 'Klubowicz'}</span>
+              <ChevronDown className="h-4 w-4 shrink-0 text-slate-400" />
+            </button>
+          ) : (
+            <Link href={homeHref} className="min-w-0 truncate rounded-xl px-1.5 py-1 font-semibold text-slate-900">
+              {clubName ?? 'Klubowicz'}
+            </Link>
+          )}
 
           {clubOpen && (
             <>

@@ -2,7 +2,8 @@
 
 import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Bell, LogOut, Save, Shirt } from 'lucide-react';
+import Link from 'next/link';
+import { ArrowLeft, Bell, LogOut, Save, Shirt } from 'lucide-react';
 import { POSITION_LABEL, isPosition, type Position } from '@/lib/positions';
 import { PositionPicker } from '@/components/Position';
 import { useAuth, useRequireAuth } from '@/lib/auth';
@@ -161,13 +162,18 @@ function AccountInner() {
     }
     await refreshProfile();
     toast('Zapisano profil.');
-    if (first) router.replace('/');
+    router.replace('/');
   }
 
   return (
     <>
       <AppHeader />
       <main className="mx-auto max-w-3xl p-4 pb-16">
+        {!first && (
+          <Link href="/" className="mb-3 inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800">
+            <ArrowLeft className="h-4 w-4" /> Wróć
+          </Link>
+        )}
         <PageTitle
           title={first ? 'Uzupełnij profil' : 'Moje konto'}
           subtitle={first ? 'Podaj imię i nazwisko – zobaczą je osoby z Twojego klubu na listach treningów.' : undefined}
