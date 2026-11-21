@@ -20,9 +20,9 @@ import {
   type CsvEncoding,
 } from '@/lib/csv';
 import type { AdminMember } from '@/lib/types';
-import OwnerGuard from '@/components/OwnerGuard';
+import FinanceTabs, { ClubFinanceGuard } from '@/components/FinanceTabs';
 import { useToast } from '@/components/Toast';
-import { ConfirmModal, ErrorBox, PageTitle, Spinner } from '@/components/ui';
+import { ConfirmModal, ErrorBox, Spinner } from '@/components/ui';
 
 interface PreviewRow {
   idx: number;
@@ -303,11 +303,8 @@ export default function ImportPage() {
   }
 
   return (
-    <OwnerGuard allowFinance>
-      <PageTitle
-        title="Import wyciągu CSV"
-        subtitle="Plik jest analizowany w Twojej przeglądarce. Do bazy trafiają zatwierdzone wpłaty i historia operacji konta klubu (widoczna tylko dla Właściciela i Skarbnika)."
-      />
+    <ClubFinanceGuard financeOnly>
+      <FinanceTabs note="Plik jest analizowany w Twojej przeglądarce. Do bazy trafiają zatwierdzone wpłaty i historia operacji konta klubu (bez adresów, widoczna tylko dla Właściciela i Skarbnika)." />
       {suspended && <ErrorBox message="Import jest zablokowany – klub jest zawieszony." />}
 
       <div className="card mb-4 flex flex-col gap-3">
@@ -558,6 +555,6 @@ export default function ImportPage() {
         onConfirm={() => void book()}
         onClose={() => setConfirm(false)}
       />
-    </OwnerGuard>
+    </ClubFinanceGuard>
   );
 }

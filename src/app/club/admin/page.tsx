@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
-import { Banknote, ChevronRight, FileUp, Landmark, RefreshCw, Settings, Target, Users } from 'lucide-react';
+import { ChevronRight, RefreshCw, Settings, Users } from 'lucide-react';
 import { useClub } from '@/lib/club';
 import { errMsg, supabase } from '@/lib/supabase';
 import { clubHref, inviteLink } from '@/lib/nav';
@@ -21,36 +21,12 @@ export default function AdminHubPage() {
 
   const allTiles = [
     {
-      href: clubHref(clubId, 'budget'),
-      icon: Target,
-      title: 'Budżet miesiąca',
-      desc: 'Cel kosztów (sala, księgowa…) vs składki i treningi, podpowiedzi stawek',
-    },
-    {
       href: clubHref(clubId, 'members'),
       icon: Users,
       owner: true,
       title: 'Członkowie',
       desc: pending > 0 ? `${pending} oczekuje na akceptację` : 'Akceptacja, role, tryby rozliczeń, aliasy',
       alert: pending > 0,
-    },
-    {
-      href: clubHref(clubId, 'payments'),
-      icon: Banknote,
-      title: 'Rozliczenia',
-      desc: 'Salda, naliczanie składek, ręczne wpłaty',
-    },
-    {
-      href: clubHref(clubId, 'bank'),
-      icon: Landmark,
-      title: 'Konto klubu',
-      desc: 'Stan konta i historia operacji z wyciągów CSV',
-    },
-    {
-      href: clubHref(clubId, 'import'),
-      icon: FileUp,
-      title: 'Import wyciągu CSV',
-      desc: 'Automatyczne księgowanie przelewów',
     },
     {
       href: clubHref(clubId, 'settings'),
@@ -76,10 +52,10 @@ export default function AdminHubPage() {
   }
 
   return (
-    <OwnerGuard back={false} allowFinance>
+    <OwnerGuard back={false}>
       <PageTitle
-        title={isOwner ? 'Zarządzanie klubem' : 'Finanse klubu'}
-        subtitle={isOwner ? `${ctx.club.name} (${ctx.club.prefix})` : 'Jesteś Skarbnikiem – rozliczenia i wyciągi'}
+        title="Zarządzanie klubem"
+        subtitle={`${ctx.club.name} (${ctx.club.prefix}) · finanse klubu są w zakładce Finanse`}
       />
 
       <div className="flex flex-col gap-3">

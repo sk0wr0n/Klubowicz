@@ -8,9 +8,9 @@ import { errMsg, supabase } from '@/lib/supabase';
 import { currentPeriod, formatDate, formatDateTime, money, periodLabel, todayInput } from '@/lib/format';
 import { parseAmount } from '@/lib/csv';
 import { clubHref } from '@/lib/nav';
-import OwnerGuard from '@/components/OwnerGuard';
+import FinanceTabs, { ClubFinanceGuard } from '@/components/FinanceTabs';
 import { useToast } from '@/components/Toast';
-import { EmptyState, ErrorBox, Modal, PageTitle, Spinner } from '@/components/ui';
+import { EmptyState, ErrorBox, Modal, Spinner } from '@/components/ui';
 
 interface Overview {
   balance: number | null;
@@ -99,8 +99,8 @@ export default function BankPage() {
   }
 
   return (
-    <OwnerGuard allowFinance>
-      <PageTitle title="Konto klubu" subtitle="Saldo i historia operacji z wyciągów bankowych" />
+    <ClubFinanceGuard financeOnly>
+      <FinanceTabs />
       {error && <ErrorBox message={error} />}
 
       {!ov ? (
@@ -280,6 +280,6 @@ export default function BankPage() {
           </form>
         )}
       </Modal>
-    </OwnerGuard>
+    </ClubFinanceGuard>
   );
 }

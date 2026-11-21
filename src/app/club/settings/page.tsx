@@ -124,7 +124,7 @@ export default function SettingsPage() {
     setBudgetBusy(false);
     if (error) toast(errMsg(error), 'error');
     else {
-      toast(budgetOn ? 'Budżet widzi już tylko sztab finansowy.' : 'Budżet miesiąca widzą teraz wszyscy członkowie.');
+      toast(budgetOn ? 'Finanse klubu widzą już tylko Właściciel i Skarbnik.' : 'Finanse klubu (budżet) widzą teraz wszyscy członkowie.');
       await reload();
     }
   }
@@ -189,11 +189,11 @@ export default function SettingsPage() {
       <div className="card mb-4">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="text-sm font-semibold">Pokaż budżet wszystkim</p>
+            <p className="text-sm font-semibold">Pokaż finanse klubu wszystkim</p>
             <p className="mt-0.5 text-xs text-slate-500">
               {budgetOn
-                ? 'Włączone – każdy członek widzi w Finansach, ile brakuje do celu miesiąca (np. na salę) albo ile jest na plus, w złotówkach i procentach. Nie widać sald ani wpłat poszczególnych osób.'
-                : 'Wyłączone – budżet miesiąca widzi tylko Właściciel i Skarbnik.'}
+                ? 'Włączone – każdy członek widzi w Finansach zakładkę „Finanse klubu” z budżetem miesiąca: ile brakuje do celu (np. na salę) albo ile jest na plus, w zł i procentach. Stan konta, salda i wpłaty poszczególnych osób widzą tylko Właściciel i Skarbnik.'
+                : 'Wyłączone – zakładkę „Finanse klubu” widzą tylko Właściciel i Skarbnik.'}
             </p>
           </div>
           <button
@@ -240,8 +240,8 @@ export default function SettingsPage() {
             </div>
           </div>
           <p className="-mt-1 text-[11px] text-slate-500">
-            Zmiana tutaj działa od razu. Żeby zmienić stawki od 1. dnia kolejnego miesiąca, użyj podpowiedzi w Zarządzanie → Budżet
-            miesiąca.
+            Zmiana tutaj działa od razu. Żeby zmienić stawki od 1. dnia kolejnego miesiąca, użyj podpowiedzi w Finanse → Finanse klubu →
+            Budżet.
             {c.next_fees &&
               ` Zaplanowano od ${c.next_fees.from}: składka ${money(c.next_fees.monthly)}, trening ${money(c.next_fees.single)}.`}
           </p>

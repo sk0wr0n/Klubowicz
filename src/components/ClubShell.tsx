@@ -117,14 +117,15 @@ export default function ClubShell({ children }: { children: ReactNode }) {
     { href: clubHref(clubId, 'team'), match: '/club/team/', label: 'Zespół', icon: Users, show: true },
     { href: clubHref(clubId, 'stats'), match: '/club/stats/', label: 'Statystyki', icon: Trophy, show: true },
     { href: clubHref(clubId, 'finance'), match: '/club/finance/', label: 'Finanse', icon: Wallet, show: true },
-    { href: clubHref(clubId, 'admin'), match: '/club/admin/', label: 'Zarządzanie', icon: Settings, show: value.isOwner || value.isFinance },
+    { href: clubHref(clubId, 'admin'), match: '/club/admin/', label: 'Zarządzanie', icon: Settings, show: value.isOwner },
   ].filter((n) => n.show);
 
   const isActive = (match: string) =>
     match === '/club/'
       ? pathname === '/club/' || pathname === '/club' || pathname.startsWith('/club/training')
       : pathname.startsWith(match) ||
-        (match === '/club/admin/' && /^\/club\/(members|payments|import|settings)/.test(pathname));
+        (match === '/club/admin/' && /^\/club\/(members|settings)/.test(pathname)) ||
+        (match === '/club/finance/' && /^\/club\/(budget|bank|payments|import)/.test(pathname));
 
   return (
     <ClubContext.Provider value={value}>

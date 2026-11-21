@@ -7,11 +7,10 @@ import { errMsg, supabase } from '@/lib/supabase';
 import { currentPeriod, money, periodLabel, todayInput } from '@/lib/format';
 import type { AdminMember, Transaction } from '@/lib/types';
 import BalanceUpdateInfo from '@/components/BalanceUpdateInfo';
-import OwnerGuard from '@/components/OwnerGuard';
-import BankMini from '@/components/BankMini';
+import FinanceTabs, { ClubFinanceGuard } from '@/components/FinanceTabs';
 import TransactionList from '@/components/TransactionList';
 import { useToast } from '@/components/Toast';
-import { Avatar, ConfirmModal, ErrorBox, Modal, PageTitle, Spinner } from '@/components/ui';
+import { Avatar, ConfirmModal, ErrorBox, Modal, Spinner } from '@/components/ui';
 
 export default function PaymentsPage() {
   const { clubId, ctx, suspended, reload } = useClub();
@@ -127,9 +126,8 @@ export default function PaymentsPage() {
   }
 
   return (
-    <OwnerGuard allowFinance>
-      <PageTitle title="Rozliczenia" subtitle={`Łączne zadłużenie: ${money(totalDebt)}`} />
-      <BankMini />
+    <ClubFinanceGuard financeOnly>
+      <FinanceTabs note={`Salda zawodników · łączne zadłużenie: ${money(totalDebt)}`} />
       {error && <ErrorBox message={error} />}
       <BalanceUpdateInfo className="mb-4" />
 
@@ -315,6 +313,6 @@ export default function PaymentsPage() {
         onConfirm={() => void deleteTx()}
         onClose={() => setDelTx(null)}
       />
-    </OwnerGuard>
+    </ClubFinanceGuard>
   );
 }

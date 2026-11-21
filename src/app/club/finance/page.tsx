@@ -13,8 +13,8 @@ import { useToast } from '@/components/Toast';
 import CopyField from '@/components/CopyField';
 import TransactionList from '@/components/TransactionList';
 import UpcomingCharges from '@/components/UpcomingCharges';
-import BudgetMini from '@/components/BudgetMini';
-import { ConfirmModal, ErrorBox, PageTitle, Spinner } from '@/components/ui';
+import FinanceTabs from '@/components/FinanceTabs';
+import { ConfirmModal, ErrorBox, Spinner } from '@/components/ui';
 
 export default function FinancePage() {
   const { clubId, ctx, reload, nameOf } = useClub();
@@ -63,9 +63,8 @@ export default function FinancePage() {
 
   return (
     <>
-      <PageTitle title="Moje finanse" subtitle={ctx.club.name} />
+      <FinanceTabs />
       {error && <ErrorBox message={error} />}
-      <BudgetMini />
       {ctx.club.next_fees && (
         <div className="mb-4 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-900">
           <p className="font-semibold">

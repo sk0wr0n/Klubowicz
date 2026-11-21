@@ -2,15 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, ChevronLeft, ChevronRight, Lightbulb, Pencil, Plus, RotateCcw, Target, Trash2, Users, Volleyball, Wallet } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { ChevronLeft, ChevronRight, Lightbulb, Pencil, Plus, RotateCcw, Target, Trash2, Users, Volleyball, Wallet } from 'lucide-react';
 import { useClub } from '@/lib/club';
 import { errMsg, supabase } from '@/lib/supabase';
 import { currentPeriod, formatShortDay, formatTime, money, periodLabel } from '@/lib/format';
-import { clubHref, trainingHref } from '@/lib/nav';
-import OwnerGuard from '@/components/OwnerGuard';
+import { trainingHref } from '@/lib/nav';
+import FinanceTabs, { ClubFinanceGuard } from '@/components/FinanceTabs';
 import { useToast } from '@/components/Toast';
-import { ConfirmModal, EmptyState, ErrorBox, Modal, PageTitle, Spinner } from '@/components/ui';
+import { ConfirmModal, ErrorBox, Modal, Spinner } from '@/components/ui';
 
 interface BudgetItem {
   id: string;
@@ -66,21 +65,6 @@ interface Suggestion {
 }
 
 type Scope = 'month' | 'all';
-
-function BudgetGuard({ children }: { children: ReactNode }) {
-  const { isFinance, ctx, clubId } = useClub();
-  if (isFinance) return <OwnerGuard allowFinance>{children}</OwnerGuard>;
-  if (!ctx.club.budget_public)
-    return <EmptyState title="Brak dostępu">Budżet klubu widzą Właściciel i Skarbnik.</EmptyState>;
-  return (
-    <>
-      <Link href={clubHref(clubId, 'finance')} className="mb-3 inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800">
-        <ArrowLeft className="h-4 w-4" /> Finanse
-      </Link>
-      {children}
-    </>
-  );
-}
 
 export default function BudgetPage() {
   const { clubId, isOwner, reload } = useClub();
@@ -273,8 +257,8 @@ export default function BudgetPage() {
   const pct = (v: number) => (calc && calc.target > 0 ? Math.min(100, Math.round((v / calc.target) * 100)) : 0);
 
   return (
-    <BudgetGuard>
-      <PageTitle title="Budżet miesiąca" subtitle="Cel kosztów vs składki i opłaty za treningi" />
+    <ClubFinanceGuard>
+      <FinanceTabs />
 
       <div className="mb-4 flex items-center justify-between rounded-xl bg-white p-1 shadow-sm ring-1 ring-slate-200">
         <button className="btn btn-ghost btn-sm" onClick={() => setPeriod(shiftPeriod(period, -1))} aria-label="Poprzedni miesiąc">
@@ -665,6 +649,6 @@ export default function BudgetPage() {
         onConfirm={() => void applySuggestion()}
         onClose={() => setApply(null)}
       />
-    </BudgetGuard>
+    </ClubFinanceGuard>
   );
 }
