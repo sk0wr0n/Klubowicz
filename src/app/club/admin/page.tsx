@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
-import { Banknote, ChevronRight, FileUp, RefreshCw, Settings, Users } from 'lucide-react';
+import { Banknote, ChevronRight, FileUp, RefreshCw, Settings, Target, Users } from 'lucide-react';
 import { useClub } from '@/lib/club';
 import { errMsg, supabase } from '@/lib/supabase';
 import { clubHref, inviteLink } from '@/lib/nav';
@@ -20,6 +20,12 @@ export default function AdminHubPage() {
   const pending = ctx.pending_members ?? 0;
 
   const allTiles = [
+    {
+      href: clubHref(clubId, 'budget'),
+      icon: Target,
+      title: 'Budżet miesiąca',
+      desc: 'Cel kosztów (sala, księgowa…) vs składki i treningi, podpowiedzi stawek',
+    },
     {
       href: clubHref(clubId, 'members'),
       icon: Users,

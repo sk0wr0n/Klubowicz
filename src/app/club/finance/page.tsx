@@ -13,6 +13,7 @@ import { useToast } from '@/components/Toast';
 import CopyField from '@/components/CopyField';
 import TransactionList from '@/components/TransactionList';
 import UpcomingCharges from '@/components/UpcomingCharges';
+import BudgetMini from '@/components/BudgetMini';
 import { ConfirmModal, ErrorBox, PageTitle, Spinner } from '@/components/ui';
 
 export default function FinancePage() {
@@ -64,6 +65,7 @@ export default function FinancePage() {
     <>
       <PageTitle title="Moje finanse" subtitle={ctx.club.name} />
       {error && <ErrorBox message={error} />}
+      <BudgetMini />
 
       <div className={`card mb-4 text-center ${balance < 0 ? 'border-red-200 bg-red-50' : 'border-emerald-200 bg-emerald-50'}`}>
         <p className="text-sm font-medium text-slate-600">Twoje saldo w klubie</p>

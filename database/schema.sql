@@ -3410,6 +3410,161 @@ begin
   perform cron.schedule('klubowicz-backup', '0 20,21 * * 1,4', 'select public._scheduled_backup()');
 end $$;
 
+-- =====================================================================
+-- BUDŻET MIESIĄCA: cel (koszty: sala, księgowa…) vs przychody ze składek i treningów
+-- Widoczny dla Właściciela i Skarbnika.
+-- =====================================================================
+
+create table if not exists public.club_budget_items (
+  id         uuid primary key default gen_random_uuid(),
+  club_id    uuid not null references public.clubs (id) on delete cascade,
+  name       text not null check (char_length(trim(name)) between 1 and 60),
+  amount     numeric(10,2) not null check (amount > 0),
+  sort       integer not null default 0,
+  created_at timestamptz not null default now()
+);
+create index if not exists club_budget_items_club_idx on public.club_budget_items (club_id, sort, created_at);
+alter table public.club_budget_items enable row level security;
+drop policy if exists club_budget_items_select on public.club_budget_items;
+create policy club_budget_items_select on public.club_budget_items for select to authenticated
+  using (public.is_club_finance(club_id) or public.is_superadmin());
+revoke all on public.club_budget_items from anon, authenticated;
+grant select on public.club_budget_items to authenticated;
+
+create or replace function public.save_budget_item(p_club uuid, p_id uuid, p_name text, p_amount numeric)
+returns uuid language plpgsql volatile security definer set search_path = public as $$
+declare v_id uuid;
+begin
+  perform public._require_finance(p_club);
+  if coalesce(trim(p_name), '') = '' then raise exception 'Podaj nazwę kosztu (np. Sala).'; end if;
+  if p_amount is null or p_amount <= 0 then raise exception 'Kwota musi być większa od zera.'; end if;
+  if p_id is null then
+    insert into public.club_budget_items (club_id, name, amount, sort)
+    values (p_club, left(trim(p_name), 60), round(p_amount, 2),
+            coalesce((select max(sort) + 1 from public.club_budget_items where club_id = p_club), 0))
+    returning id into v_id;
+  else
+    update public.club_budget_items set name = left(trim(p_name), 60), amount = round(p_amount, 2)
+    where id = p_id and club_id = p_club returning id into v_id;
+    if v_id is null then raise exception 'Nie znaleziono pozycji.'; end if;
+  end if;
+  return v_id;
+end $$;
+
+create or replace function public.delete_budget_item(p_id uuid)
+returns void language plpgsql volatile security definer set search_path = public as $$
+declare v_club uuid;
+begin
+  select club_id into v_club from public.club_budget_items where id = p_id;
+  if v_club is null then raise exception 'Nie znaleziono pozycji.'; end if;
+  perform public._require_finance(v_club);
+  delete from public.club_budget_items where id = p_id;
+end $$;
+
+-- Właściciel zmienia stawki (składka miesięczna / opłata za trening) – np. z podpowiedzi budżetu
+create or replace function public.set_club_fees(p_club uuid, p_monthly numeric, p_single numeric)
+returns void language plpgsql volatile security definer set search_path = public as $$
+begin
+  perform public._require_owner(p_club);
+  if (p_monthly is not null and p_monthly < 0) or (p_single is not null and p_single < 0) then
+    raise exception 'Kwota nie może być ujemna.';
+  end if;
+  update public.clubs set
+    monthly_fee_amount = coalesce(round(p_monthly, 2), monthly_fee_amount),
+    single_training_fee_amount = coalesce(round(p_single, 2), single_training_fee_amount)
+  where id = p_club;
+end $$;
+
+-- Zestawienie miesiąca: cel, składki, treningi (rozliczone / zapisani / prognoza), wpłaty
+create or replace function public.budget_overview(p_club uuid, p_period text default null)
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare
+  v_period  text := coalesce(nullif(trim(p_period), ''), to_char(now() at time zone 'Europe/Warsaw', 'YYYY-MM'));
+  v_cur     text := to_char(now() at time zone 'Europe/Warsaw', 'YYYY-MM');
+  v_from    timestamptz;
+  v_to      timestamptz;
+  c         public.clubs%rowtype;
+  v_avg     numeric;
+  v_res     jsonb;
+begin
+  if not (public.is_club_finance(p_club) or public.is_superadmin()) then
+    raise exception 'Budżet widzi tylko Właściciel i Skarbnik klubu.' using errcode = '42501';
+  end if;
+  if v_period !~ '^[0-9]{4}-(0[1-9]|1[0-2])$' then raise exception 'Nieprawidłowy miesiąc.'; end if;
+  select * into c from public.clubs where id = p_club;
+  v_from := (v_period || '-01')::timestamp at time zone 'Europe/Warsaw';
+  v_to   := ((v_period || '-01')::date + interval '1 month')::timestamp at time zone 'Europe/Warsaw';
+
+  -- średnio ile osób „za trening” było na rozliczonym treningu (ostatnie 90 dni)
+  select avg(n) into v_avg from (
+    select count(x.id) as n
+    from public.trainings t
+    left join public.transactions x on x.training_id = t.id and x.type = 'session_fee'
+    where t.club_id = p_club and t.status = 'settled' and t.starts_at >= now() - interval '90 days'
+    group by t.id
+  ) s;
+
+  with tr as (
+    select t.id, t.title, t.starts_at, t.status, t.max_participants,
+           (select coalesce(sum(-x.amount), 0) from public.transactions x
+             where x.training_id = t.id and x.type in ('session_fee', 'late_cancel_fee')) as charged,
+           (select count(*) from public.transactions x where x.training_id = t.id and x.type = 'session_fee') as charged_n,
+           (select count(*) from public.training_signups s
+              join public.club_members m on m.club_id = s.club_id and m.user_id = s.user_id
+             where s.training_id = t.id and s.status = 'main' and m.billing_mode = 'per_session') as per_session_signed,
+           (select count(*) from public.training_signups s where s.training_id = t.id and s.status = 'main') as signed
+    from public.trainings t
+    where t.club_id = p_club and t.status <> 'cancelled' and t.starts_at >= v_from and t.starts_at < v_to
+  ),
+  mon as (
+    select
+      (select count(*) from public.club_members m
+        where m.club_id = p_club and m.status = 'active' and m.billing_mode = 'monthly') as members_now,
+      (select count(*) from public.transactions x
+        where x.club_id = p_club and x.type = 'monthly_fee' and x.period = v_period) as charged_n,
+      (select coalesce(sum(-x.amount), 0) from public.transactions x
+        where x.club_id = p_club and x.type = 'monthly_fee' and x.period = v_period) as charged,
+      (select count(*) from public.club_members m
+        where m.club_id = p_club and m.status = 'active' and m.billing_mode = 'monthly'
+          and not exists (select 1 from public.transactions x where x.club_id = p_club and x.user_id = m.user_id
+                          and x.type = 'monthly_fee' and x.period = v_period)) as not_charged
+  )
+  select jsonb_build_object(
+    'period', v_period,
+    'is_past', v_period < v_cur,
+    'monthly_fee', c.monthly_fee_amount,
+    'single_fee', c.single_training_fee_amount,
+    'items', coalesce((select jsonb_agg(jsonb_build_object('id', i.id, 'name', i.name, 'amount', i.amount) order by i.sort, i.created_at)
+                       from public.club_budget_items i where i.club_id = p_club), '[]'::jsonb),
+    'monthly', (select jsonb_build_object(
+        'members', mon.members_now,
+        'charged_count', mon.charged_n,
+        'charged', mon.charged,
+        -- jeszcze nienaliczone składki (bieżący i przyszłe miesiące) liczymy po aktualnej stawce
+        'expected', mon.charged + case when v_period >= v_cur then mon.not_charged * c.monthly_fee_amount else 0 end,
+        'expected_count', mon.charged_n + case when v_period >= v_cur then mon.not_charged else 0 end)
+      from mon),
+    'avg_per_session', round(coalesce(v_avg, 0), 1),
+    'trainings', coalesce((select jsonb_agg(jsonb_build_object(
+        'id', tr.id, 'title', tr.title, 'starts_at', tr.starts_at, 'status', tr.status, 'max', tr.max_participants,
+        'signed', tr.signed, 'per_session_signed', tr.per_session_signed,
+        'charged', tr.charged, 'charged_count', tr.charged_n) order by tr.starts_at) from tr), '[]'::jsonb),
+    'payments_in', (select coalesce(sum(x.amount), 0) from public.transactions x
+                     where x.club_id = p_club and x.type = 'payment'
+                       and x.booked_at >= (v_period || '-01')::date and x.booked_at < (v_period || '-01')::date + interval '1 month')
+  ) into v_res;
+  return v_res;
+end $$;
+
+revoke all on function public.save_budget_item(uuid, uuid, text, numeric) from public, anon;
+revoke all on function public.delete_budget_item(uuid) from public, anon;
+revoke all on function public.set_club_fees(uuid, numeric, numeric) from public, anon;
+revoke all on function public.budget_overview(uuid, text) from public, anon;
+grant execute on function public.save_budget_item(uuid, uuid, text, numeric) to authenticated;
+grant execute on function public.delete_budget_item(uuid) to authenticated;
+grant execute on function public.set_club_fees(uuid, numeric, numeric) to authenticated;
+grant execute on function public.budget_overview(uuid, text) to authenticated;
+
 -- Harmonogram: 1. dnia miesiąca o 05:00 UTC (06:00 zimą / 07:00 latem w Polsce)
 do $$
 begin
