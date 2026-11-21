@@ -1,4 +1,4 @@
-export type Role = 'owner' | 'caretaker' | 'member';
+export type Role = 'owner' | 'caretaker' | 'treasurer' | 'member';
 export type MemberStatus = 'pending' | 'active' | 'removed';
 export type BillingMode = 'monthly' | 'per_session';
 export type SubStatus = 'active' | 'past_due' | 'suspended';
@@ -196,6 +196,7 @@ export interface PlatformInvoice {
 export const ROLE_LABEL: Record<Role, string> = {
   owner: 'Właściciel',
   caretaker: 'Opiekun',
+  treasurer: 'Skarbnik',
   member: 'Zawodnik',
 };
 

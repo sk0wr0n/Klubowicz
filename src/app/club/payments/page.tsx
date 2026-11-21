@@ -126,7 +126,7 @@ export default function PaymentsPage() {
   }
 
   return (
-    <OwnerGuard>
+    <OwnerGuard allowFinance>
       <PageTitle title="Rozliczenia" subtitle={`Łączne zadłużenie: ${money(totalDebt)}`} />
       {error && <ErrorBox message={error} />}
       <BalanceUpdateInfo className="mb-4" />

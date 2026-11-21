@@ -68,7 +68,8 @@ export default function ClubShell({ children }: { children: ReactNode }) {
       members,
       memberMap,
       isOwner: ctx.my_role === 'owner',
-      isStaff: ctx.my_role === 'owner' || ctx.my_role === 'caretaker',
+      isStaff: ctx.my_role === 'owner' || ctx.my_role === 'caretaker' || ctx.my_role === 'treasurer',
+      isFinance: ctx.my_role === 'owner' || ctx.my_role === 'treasurer',
       suspended: ctx.subscription_status === 'suspended',
       reload,
       reloadMembers,
@@ -97,7 +98,7 @@ export default function ClubShell({ children }: { children: ReactNode }) {
     { href: clubHref(clubId, 'team'), match: '/club/team/', label: 'Zespół', icon: Users, show: value.isStaff },
     { href: clubHref(clubId, 'stats'), match: '/club/stats/', label: 'Statystyki', icon: Trophy, show: true },
     { href: clubHref(clubId, 'finance'), match: '/club/finance/', label: 'Finanse', icon: Wallet, show: true },
-    { href: clubHref(clubId, 'admin'), match: '/club/admin/', label: 'Zarządzanie', icon: Settings, show: value.isOwner },
+    { href: clubHref(clubId, 'admin'), match: '/club/admin/', label: 'Zarządzanie', icon: Settings, show: value.isOwner || value.isFinance },
   ].filter((n) => n.show);
 
   const isActive = (match: string) =>

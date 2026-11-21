@@ -122,7 +122,9 @@ export default function MembersPage() {
                           ? 'bg-indigo-100 text-indigo-700'
                           : m.role === 'caretaker'
                             ? 'bg-sky-100 text-sky-700'
-                            : 'bg-slate-100 text-slate-600'
+                            : m.role === 'treasurer'
+                              ? 'bg-emerald-100 text-emerald-700'
+                              : 'bg-slate-100 text-slate-600'
                       }`}
                     >
                       {ROLE_LABEL[m.role]}
@@ -223,27 +225,32 @@ export default function MembersPage() {
                   </details>
 
                   {m.role !== 'owner' && (
-                    <label className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 p-3">
-                      <span>
-                        <span className="block text-sm font-medium">Opiekun klubu / Trener</span>
-                        <span className="block text-xs text-slate-500">
-                          Może tworzyć treningi, sprawdzać obecność i rozliczać treningi. Nie widzi finansów klubu.
-                        </span>
-                      </span>
-                      <input
-                        type="checkbox"
-                        className="h-6 w-6 accent-indigo-600"
-                        checked={m.role === 'caretaker'}
+                    <div>
+                      <label className="label">Rola w klubie</label>
+                      <select
+                        className="input"
+                        value={m.role}
                         disabled={busy}
                         onChange={(e) =>
                           void call(
                             'set_member_role',
-                            { p_member_id: m.member_id, p_role: e.target.checked ? 'caretaker' : 'member' },
-                            e.target.checked ? 'Nadano rolę Opiekuna.' : 'Odebrano rolę Opiekuna.'
+                            { p_member_id: m.member_id, p_role: e.target.value },
+                            `Nadano rolę: ${ROLE_LABEL[e.target.value as keyof typeof ROLE_LABEL]}.`
                           )
                         }
-                      />
-                    </label>
+                      >
+                        <option value="member">Zawodnik</option>
+                        <option value="caretaker">Opiekun / Trener</option>
+                        <option value="treasurer">Skarbnik</option>
+                      </select>
+                      <p className="mt-1 text-xs text-slate-500">
+                        {m.role === 'treasurer'
+                          ? 'Skarbnik: wszystko co Opiekun + finanse klubu – import wyciągów, wpłaty i korekty, naliczanie składek, salda wszystkich.'
+                          : m.role === 'caretaker'
+                            ? 'Opiekun: treningi, obecność, turnieje, podgląd sald zespołu. Nie księguje wpłat.'
+                            : 'Zawodnik: zapisy, swoje finanse i statystyki.'}
+                      </p>
+                    </div>
                   )}
 
                   <div>

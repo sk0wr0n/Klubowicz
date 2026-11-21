@@ -2981,6 +2981,78 @@ begin
   perform cron.schedule('klubowicz-mailer', '*/10 * * * *', 'select public._kick_mailer()');
 end $$;
 
+-- Rola „Skarbnik” (treasurer): wszystko co Opiekun + finanse klubu
+-- (import wyciągów, ręczne wpłaty/korekty, naliczanie składek, salda i historia wszystkich).
+alter table public.club_members drop constraint if exists club_members_role_check;
+alter table public.club_members add constraint club_members_role_check
+  check (role in ('owner', 'caretaker', 'treasurer', 'member'));
+
+create or replace function public.is_club_staff(p_club uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select coalesce(public.club_role(p_club) in ('owner', 'caretaker', 'treasurer'), false);
+$$;
+
+create or replace function public.is_club_finance(p_club uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select coalesce(public.club_role(p_club) in ('owner', 'treasurer'), false);
+$$;
+
+create or replace function public._require_finance(p_club uuid)
+returns uuid language plpgsql stable security definer set search_path = public as $$
+declare v uuid := public._require_uid();
+begin
+  if not public.is_club_finance(p_club) then
+    raise exception 'Tę operację może wykonać tylko Skarbnik lub Właściciel klubu.' using errcode = '42501';
+  end if;
+  return v;
+end $$;
+
+grant execute on function public.is_club_finance(uuid) to authenticated;
+revoke all on function public._require_finance(uuid) from public, anon, authenticated;
+
+-- funkcje finansowe: Właściciel → Właściciel lub Skarbnik
+do $$
+declare
+  f record;
+  v_def text;
+begin
+  for f in
+    select p.oid from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public'
+      and p.proname in ('charge_monthly_fees', 'add_manual_transaction', 'delete_transaction',
+                        'check_bank_hashes', 'import_bank_payments', 'set_member_aliases', 'admin_list_members')
+  loop
+    v_def := pg_get_functiondef(f.oid);
+    if position('_require_owner(' in v_def) > 0 then
+      execute replace(v_def, '_require_owner(', '_require_finance(');
+    end if;
+  end loop;
+end $$;
+
+-- księga: zawodnik widzi swoje, Właściciel i Skarbnik – całego klubu
+drop policy if exists transactions_select on public.transactions;
+create policy transactions_select on public.transactions for select to authenticated
+  using (user_id = auth.uid() or public.is_club_finance(club_id) or public.is_superadmin());
+
+create or replace function public.set_member_role(p_member_id uuid, p_role text)
+returns void language plpgsql volatile security definer set search_path = public as $$
+declare m public.club_members%rowtype;
+begin
+  select * into m from public.club_members where id = p_member_id;
+  if not found then raise exception 'Nie znaleziono członka.'; end if;
+  perform public._require_owner(m.club_id);
+  if p_role not in ('caretaker', 'treasurer', 'member') then
+    raise exception 'Właściciel może nadać rolę Opiekuna, Skarbnika lub Zawodnika.';
+  end if;
+  if m.role = 'owner' then
+    raise exception 'Nie można zmienić roli Właściciela.';
+  end if;
+  if m.status <> 'active' then
+    raise exception 'Rolę można nadać tylko aktywnemu członkowi.';
+  end if;
+  update public.club_members set role = p_role where id = p_member_id;
+end $$;
+
 -- Harmonogram: 1. dnia miesiąca o 05:00 UTC (06:00 zimą / 07:00 latem w Polsce)
 do $$
 begin

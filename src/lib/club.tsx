@@ -10,6 +10,8 @@ export interface ClubState {
   memberMap: Record<string, ClubMemberRow>;
   isOwner: boolean;
   isStaff: boolean;
+  /** Właściciel lub Skarbnik – finanse klubu */
+  isFinance: boolean;
   suspended: boolean;
   reload: () => Promise<void>;
   reloadMembers: () => Promise<void>;

@@ -8,10 +8,25 @@ import { clubHref } from '@/lib/nav';
 import { EmptyState } from './ui';
 
 /** Widoki dostępne wyłącznie dla Właściciela klubu (dodatkowo chronione przez RLS/RPC w bazie). */
-export default function OwnerGuard({ children, back = true }: { children: ReactNode; back?: boolean }) {
-  const { isOwner, clubId } = useClub();
-  if (!isOwner) {
-    return <EmptyState title="Brak dostępu">Ta sekcja jest dostępna tylko dla Właściciela klubu.</EmptyState>;
+export default function OwnerGuard({
+  children,
+  back = true,
+  allowFinance = false,
+}: {
+  children: ReactNode;
+  back?: boolean;
+  /** dostęp także dla Skarbnika (finanse klubu) */
+  allowFinance?: boolean;
+}) {
+  const { isOwner, isFinance, clubId } = useClub();
+  if (!isOwner && !(allowFinance && isFinance)) {
+    return (
+      <EmptyState title="Brak dostępu">
+        {allowFinance
+          ? 'Ta sekcja jest dostępna dla Właściciela i Skarbnika klubu.'
+          : 'Ta sekcja jest dostępna tylko dla Właściciela klubu.'}
+      </EmptyState>
+    );
   }
   return (
     <>

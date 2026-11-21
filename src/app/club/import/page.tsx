@@ -239,7 +239,7 @@ export default function ImportPage() {
   }
 
   return (
-    <OwnerGuard>
+    <OwnerGuard allowFinance>
       <PageTitle
         title="Import wyciągu CSV"
         subtitle="Plik jest analizowany wyłącznie w Twojej przeglądarce – do bazy trafiają tylko zatwierdzone wpłaty."
