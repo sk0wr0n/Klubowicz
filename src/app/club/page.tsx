@@ -132,14 +132,8 @@ export default function TrainingsPage() {
   return (
     <>
       <PageTitle
-        title="Treningi"
-        subtitle={
-          ctx.my_billing_mode === 'per_session'
-            ? `Płacisz za trening: ${ctx.club.single_training_fee_amount} zł`
-            : ctx.my_billing_mode === 'monthly'
-              ? 'Płacisz miesięczną składkę za wynajem sali'
-              : undefined
-        }
+        title="Zapisy"
+        subtitle="Treningi i turnieje"
         action={
           <div className="flex shrink-0 gap-2">
             <button className="btn btn-secondary btn-sm border-amber-300 text-amber-800" onClick={() => setTourOpen(true)}>
