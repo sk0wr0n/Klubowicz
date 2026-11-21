@@ -8,7 +8,6 @@ import { errMsg, supabase } from '@/lib/supabase';
 import { money } from '@/lib/format';
 import { Avatar, ErrorBox, PageTitle, Spinner } from '@/components/ui';
 
-type Period = 'month' | 'year' | 'all';
 
 interface StatRow {
   user_id: string;
@@ -41,19 +40,6 @@ interface ClubStats {
   } | null;
   members: number;
   trainings: number;
-}
-
-const PERIODS: { key: Period; label: string }[] = [
-  { key: 'month', label: 'Ten miesiąc' },
-  { key: 'year', label: 'Ten rok' },
-  { key: 'all', label: 'Od początku' },
-];
-
-function periodStart(p: Period): string | null {
-  const now = new Date();
-  if (p === 'month') return new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-  if (p === 'year') return new Date(now.getFullYear(), 0, 1).toISOString();
-  return null;
 }
 
 const MEDAL = ['🥇', '🥈', '🥉'];
@@ -115,21 +101,44 @@ function Leaderboard({
 export default function StatsPage() {
   const { clubId, ctx } = useClub();
   const { userId } = useAuth();
-  const [period, setPeriod] = useState<Period>('month');
+  const thisYear = new Date().getFullYear();
+  const [year, setYear] = useState<number>(thisYear);
+  const [firstYear, setFirstYear] = useState<number>(thisYear);
+
+  // lata do wyboru: od pierwszego rozliczonego treningu klubu do bieżącego
+  useEffect(() => {
+    void supabase()
+      .from('trainings')
+      .select('starts_at')
+      .eq('club_id', clubId)
+      .eq('status', 'settled')
+      .order('starts_at')
+      .limit(1)
+      .then(({ data }) => {
+        const first = (data as { starts_at: string }[] | null)?.[0]?.starts_at;
+        if (first) setFirstYear(Math.min(new Date(first).getFullYear(), thisYear));
+      });
+  }, [clubId, thisYear]);
+  const years: number[] = [];
+  for (let y = thisYear; y >= firstYear; y--) years.push(y);
   const [stats, setStats] = useState<ClubStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
-    const { data, error } = await supabase().rpc('club_stats', { p_club: clubId, p_from: periodStart(period) });
+    const { data, error } = await supabase().rpc('club_stats', {
+      p_club: clubId,
+      p_from: new Date(year, 0, 1).toISOString(),
+      p_to: new Date(year + 1, 0, 1).toISOString(),
+    });
     if (error) setError(errMsg(error));
     else {
       setError(null);
       setStats(data as ClubStats);
     }
     setLoading(false);
-  }, [clubId, period]);
+  }, [clubId, year]);
 
   useEffect(() => {
     void load();
@@ -144,19 +153,19 @@ export default function StatsPage() {
         title="Statystyki"
         subtitle={
           stats
-            ? `${ctx.club.name} · treningi ze sprawdzoną obecnością: ${stats.trainings}`
+            ? `Rok ${year} · treningi ze sprawdzoną obecnością: ${stats.trainings}`
             : ctx.club.name
         }
       />
 
-      <div className="mb-4 grid grid-cols-3 rounded-xl bg-slate-100 p-1 text-xs font-semibold">
-        {PERIODS.map((p) => (
+      <div className="mb-4 flex gap-1 overflow-x-auto rounded-xl bg-slate-100 p-1 text-sm font-semibold">
+        {years.map((y) => (
           <button
-            key={p.key}
-            onClick={() => setPeriod(p.key)}
-            className={`rounded-lg py-2 ${period === p.key ? 'bg-white shadow-sm' : 'text-slate-500'}`}
+            key={y}
+            onClick={() => setYear(y)}
+            className={`min-w-[72px] flex-1 rounded-lg py-2 ${year === y ? 'bg-white shadow-sm' : 'text-slate-500'}`}
           >
-            {p.label}
+            {y}
           </button>
         ))}
       </div>

@@ -1402,7 +1402,8 @@ end $$;
 -- Rankingi TOP 10: obecności na treningach, przyjazdy autem, integracje (piwo), najwyższe saldo.
 -- Liczone z zatwierdzonej obecności (training_attendance.present = true).
 -- Zwraca tylko czołówkę (saldo: wyłącznie dodatnie) + statystyki wywołującego – bez pełnej listy sald.
-create or replace function public.club_stats(p_club uuid, p_from timestamptz default null)
+drop function if exists public.club_stats(uuid, timestamptz);
+create or replace function public.club_stats(p_club uuid, p_from timestamptz default null, p_to timestamptz default null)
 returns jsonb
 language plpgsql stable security definer set search_path = public as $$
 declare
@@ -1418,7 +1419,7 @@ begin
     from public.training_attendance a
     join public.trainings t on t.id = a.training_id
     left join public.training_signups s on s.training_id = a.training_id and s.user_id = a.user_id
-    where a.club_id = p_club and a.present and (p_from is null or t.starts_at >= p_from)
+    where a.club_id = p_club and a.present and (p_from is null or t.starts_at >= p_from) and (p_to is null or t.starts_at < p_to)
   ),
   coach_tally as (
     select v.training_id, v.candidate_id, count(*) as n
@@ -1427,7 +1428,7 @@ begin
     join public.training_signups c on c.training_id = v.training_id and c.user_id = v.candidate_id and c.status = 'main'
     join public.training_signups s on s.training_id = v.training_id and s.user_id = v.voter_id and s.status in ('main', 'reserve')
     where v.club_id = p_club and t.status <> 'cancelled' and t.starts_at <= now()
-      and (p_from is null or t.starts_at >= p_from)
+      and (p_from is null or t.starts_at >= p_from) and (p_to is null or t.starts_at < p_to)
     group by v.training_id, v.candidate_id
   ),
   coach_wins as (
@@ -1439,7 +1440,7 @@ begin
     from public.training_mvp_votes v
     join public.trainings t on t.id = v.training_id
     where v.club_id = p_club and t.status <> 'cancelled'
-      and (p_from is null or t.starts_at >= p_from)
+      and (p_from is null or t.starts_at >= p_from) and (p_to is null or t.starts_at < p_to)
       and public._mvp_eligible(v.training_id, v.candidate_id)
       and public._mvp_eligible(v.training_id, v.voter_id)
     group by v.training_id, v.candidate_id
@@ -1496,7 +1497,7 @@ begin
            from ranked r where r.user_id = v_uid),
     'members', (select count(*) from base),
     'trainings', (select count(*) from public.trainings t
-                  where t.club_id = p_club and t.status = 'settled' and (p_from is null or t.starts_at >= p_from))
+                  where t.club_id = p_club and t.status = 'settled' and (p_from is null or t.starts_at >= p_from) and (p_to is null or t.starts_at < p_to))
   ) into v;
 
   return v;
@@ -1960,7 +1961,7 @@ grant execute on function public.set_signup_flags(uuid, boolean, boolean) to aut
 grant execute on function public.staff_add_signup(uuid, uuid) to authenticated;
 grant execute on function public.staff_remove_signup(uuid, uuid) to authenticated;
 grant execute on function public.settle_training(uuid, uuid[], uuid[]) to authenticated;
-grant execute on function public.club_stats(uuid, timestamptz) to authenticated;
+grant execute on function public.club_stats(uuid, timestamptz, timestamptz) to authenticated;
 grant execute on function public.team_overview(uuid) to authenticated;
 grant execute on function public.member_history(uuid, uuid) to authenticated;
 grant execute on function public.charge_monthly_fees(uuid, text) to authenticated;
