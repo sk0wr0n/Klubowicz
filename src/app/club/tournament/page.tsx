@@ -62,6 +62,15 @@ function PaidTick({ label, paid }: { label: string; paid: boolean | null }) {
   );
 }
 
+function PlannedChip({ label, amount }: { label: string; amount?: number | null }) {
+  return (
+    <span className="chip bg-amber-100 text-amber-800">
+      ⏳ {label}
+      {amount != null && ` ${money(amount)}`} – po zamknięciu
+    </span>
+  );
+}
+
 function PaidAmount({ label, amount, paid }: { label: string; amount: number | null; paid: boolean | null }) {
   if (amount === null || paid === null) return null;
   return (
@@ -292,7 +301,11 @@ export default function TournamentPage() {
         {me && (me.fee_amount != null || me.extras_amount != null) && (
           <div className="mt-2 flex flex-wrap gap-1.5">
             <PaidAmount label="Twoje wpisowe" amount={me.fee_amount} paid={me.fee_paid} />
-            <PaidAmount label="Opłaty dodatkowe" amount={me.extras_amount} paid={me.extras_paid} />
+            {me.extras_paid === null && me.extras_planned ? (
+              <PlannedChip label="Opłaty dodatkowe" amount={me.extras_amount} />
+            ) : (
+              <PaidAmount label="Opłaty dodatkowe" amount={me.extras_amount} paid={me.extras_paid} />
+            )}
           </div>
         )}
 
@@ -459,12 +472,20 @@ export default function TournamentPage() {
                         {showAmounts ? (
                           <>
                             <PaidAmount label="wpisowe" amount={p.fee_amount} paid={p.fee_paid} />
-                            <PaidAmount label="dodatkowe" amount={p.extras_amount} paid={p.extras_paid} />
+                            {p.extras_paid === null && p.extras_planned ? (
+                              <PlannedChip label="dodatkowe" amount={p.extras_amount} />
+                            ) : (
+                              <PaidAmount label="dodatkowe" amount={p.extras_amount} paid={p.extras_paid} />
+                            )}
                           </>
                         ) : (
                           <>
                             <PaidTick label="wpisowe" paid={p.fee_paid} />
-                            <PaidTick label="dodatkowe" paid={p.extras_paid} />
+                            {p.extras_paid === null && p.extras_planned ? (
+                              <PlannedChip label="dodatkowe" />
+                            ) : (
+                              <PaidTick label="dodatkowe" paid={p.extras_paid} />
+                            )}
                           </>
                         )}
                       </div>
@@ -485,7 +506,7 @@ export default function TournamentPage() {
                       {p.extras.map((x) => (
                         <li key={x.id} className="flex items-center gap-2 text-xs text-slate-500">
                           <span className="min-w-0 flex-1 truncate">
-                            {x.description.split(':')[0]} – {money(x.amount)} {x.paid ? '✓' : ''}
+                            {x.description.split(':')[0]} – {money(x.amount)} {x.planned ? '(zaplanowane)' : x.paid ? '✓' : ''}
                           </span>
                           <button
                             className="text-slate-400 hover:text-red-600"
@@ -603,7 +624,10 @@ export default function TournamentPage() {
               ))}
             </ul>
             <p className="mt-1 text-xs text-slate-500">
-              Każda zaznaczona osoba dostanie osobne obciążenie. Kto był krócej – odznacz go i dodaj mu osobno mniejszą kwotę.
+              Każda zaznaczona osoba dostanie osobne obciążenie. Kto był krócej – odznacz go i dodaj mu osobno mniejszą kwotę.{' '}
+              {closed
+                ? 'Zapisy są zamknięte – opłata od razu trafi na saldo.'
+                : 'Zapisy są otwarte – opłata będzie zaplanowana i zejdzie z salda razem z wpisowym przy zamknięciu zapisów.'}
             </p>
           </div>
         </div>
@@ -615,19 +639,21 @@ export default function TournamentPage() {
         message={
           <>
             Wpisowe <strong>{money(fee)}</strong> zostanie podzielone na <strong>{count}</strong> os. – każdy dostanie obciążenie{' '}
-            <strong>{money(share)}</strong>. Zawodnicy nie będą mogli sami się zapisać ani wypisać. Zmiany listy (wypadnięcie,
-            dopisanie) zrobisz tutaj – kwoty przeliczą się automatycznie.
+            <strong>{money(share)}</strong>.
+            {people.some((p) => p.extras_planned) && <> Razem z wpisowym zejdą też zaplanowane opłaty dodatkowe (np. nocleg).</>}{' '}
+            Zawodnicy nie będą mogli sami się zapisać ani wypisać. Zmiany listy (wypadnięcie, dopisanie) zrobisz tutaj – kwoty
+            przeliczą się automatycznie.
           </>
         }
         confirmText="Zamknij i nalicz"
         busy={busy}
-        onConfirm={() => void run(() => rpc('close_tournament', { p_tournament: tId }, 'Zapisy zamknięte, wpisowe naliczone.'))}
+        onConfirm={() => void run(() => rpc('close_tournament', { p_tournament: tId }, 'Zapisy zamknięte – wpisowe i opłaty dodatkowe naliczone.'))}
         onClose={() => setConfirm(null)}
       />
       <ConfirmModal
         open={confirm === 'reopen'}
         title="Otworzyć zapisy ponownie?"
-        message="Naliczone wpisowe zostanie cofnięte (opłaty dodatkowe zostają). Po ponownym zamknięciu wpisowe naliczy się od nowa."
+        message="Naliczone wpisowe i opłaty dodatkowe zostaną cofnięte z sald (opłaty dodatkowe wrócą do zaplanowanych). Po ponownym zamknięciu wszystko naliczy się od nowa."
         confirmText="Otwórz zapisy"
         busy={busy}
         onConfirm={() => void run(() => rpc('reopen_tournament', { p_tournament: tId }, 'Zapisy otwarte ponownie.'))}
@@ -700,7 +726,7 @@ export default function TournamentPage() {
         busy={busy}
         onConfirm={() =>
           void run(async () => {
-            await rpc('delete_tournament_extra', { p_tx: delExtra!.id }, 'Cofnięto opłatę.');
+            await rpc('delete_tournament_extra', { p_extra: delExtra!.id }, 'Usunięto opłatę.');
             setDelExtra(null);
           })
         }

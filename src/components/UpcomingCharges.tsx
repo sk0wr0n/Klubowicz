@@ -33,7 +33,7 @@ export default function UpcomingCharges({ userId, balance }: { userId: string; b
       const sb = supabase();
       const fee = Number(ctx.club.single_training_fee_amount);
       const perSession = ctx.my_billing_mode === 'per_session';
-      const [tr, to, cl] = await Promise.all([
+      const [tr, to, cl, ex] = await Promise.all([
         perSession && fee > 0
           ? sb
               .from('training_signups')
@@ -51,7 +51,26 @@ export default function UpcomingCharges({ userId, balance }: { userId: string; b
         ctx.my_billing_mode === 'monthly'
           ? sb.from('clubs').select('auto_monthly_fee, auto_monthly_fee_from').eq('id', clubId).maybeSingle()
           : Promise.resolve({ data: null }),
+        sb
+          .from('tournament_extras')
+          .select('id, amount, description, tournament_id, tournaments!inner(id, name, signup_deadline, club_id)')
+          .eq('user_id', userId)
+          .is('tx_id', null)
+          .eq('tournaments.club_id', clubId),
       ]);
+      const extrasBy = new Map<string, { amount: number; description: string }[]>();
+      const extraTours = new Map<string, { name: string; signup_deadline: string }>();
+      for (const e of (ex.data ?? []) as unknown as {
+        amount: number;
+        description: string;
+        tournament_id: string;
+        tournaments: { name: string; signup_deadline: string };
+      }[]) {
+        const l = extrasBy.get(e.tournament_id) ?? [];
+        l.push({ amount: Number(e.amount), description: e.description });
+        extrasBy.set(e.tournament_id, l);
+        extraTours.set(e.tournament_id, e.tournaments);
+      }
       const out: Item[] = [];
       const now = Date.now();
 
@@ -77,14 +96,34 @@ export default function UpcomingCharges({ userId, balance }: { userId: string; b
       }[]) {
         const n = t.tournament_signups?.length ?? 0;
         if (!t.tournament_signups?.some((s) => s.user_id === userId)) continue;
+        const extras = extrasBy.get(t.id) ?? [];
+        extraTours.delete(t.id);
+        const estFee = t.entry_fee != null && n > 0 ? Math.round((Number(t.entry_fee) / n) * 100) / 100 : null;
+        const extrasSum = extras.reduce((s2, e) => s2 + e.amount, 0);
+        const parts = [
+          estFee != null ? `wpisowe ≈ ${money(estFee)}` : 'wpisowe – kwota wkrótce',
+          ...extras.map((e) => `${e.description.toLowerCase()} ${money(e.amount)}`),
+        ];
         out.push({
           key: `x-${t.id}`,
           href: tournamentHref(clubId, t.id),
           date: new Date(`${t.signup_deadline}T12:00:00`).getTime(),
-          title: `🏆 Wpisowe: ${t.name}`,
-          amount: t.entry_fee != null && n > 0 ? Math.round((Number(t.entry_fee) / n) * 100) / 100 : null,
+          title: `🏆 Turniej: ${t.name}`,
+          amount: estFee == null && extrasSum === 0 ? null : (estFee ?? 0) + extrasSum,
           approx: true,
-          when: `po zamknięciu zapisów (termin ${formatDate(`${t.signup_deadline}T12:00:00`)}) – zależy od liczby chętnych`,
+          when: `${parts.join(' + ')} · po zamknięciu zapisów (termin ${formatDate(`${t.signup_deadline}T12:00:00`)})`,
+        });
+      }
+      // zaplanowane opłaty dodatkowe z turniejów, na które formalnie już nie jestem na liście (rzadkie)
+      for (const [id, tt] of extraTours) {
+        const extras = extrasBy.get(id) ?? [];
+        out.push({
+          key: `xe-${id}`,
+          href: tournamentHref(clubId, id),
+          date: new Date(`${tt.signup_deadline}T12:00:00`).getTime(),
+          title: `🏆 Turniej: ${tt.name}`,
+          amount: extras.reduce((s2, e) => s2 + e.amount, 0),
+          when: extras.map((e) => `${e.description.toLowerCase()} ${money(e.amount)}`).join(' + '),
         });
       }
 

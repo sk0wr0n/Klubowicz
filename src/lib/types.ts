@@ -251,7 +251,7 @@ export interface TournamentExtra {
   amount: number;
   description: string;
   paid: boolean;
-  booked_at: string;
+  planned: boolean;
 }
 
 export interface TournamentParticipant {
@@ -262,5 +262,6 @@ export interface TournamentParticipant {
   fee_paid: boolean | null;
   extras_amount: number | null;
   extras_paid: boolean | null;
+  extras_planned: boolean | null;
   extras: TournamentExtra[] | null;
 }

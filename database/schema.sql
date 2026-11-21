@@ -2413,6 +2413,207 @@ end $$;
 revoke all on function public.set_tournament_availability(uuid, date[], text, uuid) from public, anon;
 grant execute on function public.set_tournament_availability(uuid, date[], text, uuid) to authenticated;
 
+-- Opłaty dodatkowe turnieju: przy otwartych zapisach są ZAPLANOWANE (nie zmieniają salda),
+-- schodzą z salda razem z wpisowym przy zamknięciu zapisów. Po zamknięciu – od razu.
+create table if not exists public.tournament_extras (
+  id            uuid primary key default gen_random_uuid(),
+  tournament_id uuid not null references public.tournaments (id) on delete cascade,
+  club_id       uuid not null references public.clubs (id) on delete cascade,
+  user_id       uuid not null references public.profiles (id) on delete cascade,
+  amount        numeric(10,2) not null check (amount > 0),
+  description   text not null check (char_length(description) between 1 and 120),
+  tx_id         uuid references public.transactions (id) on delete set null,
+  created_by    uuid references public.profiles (id) on delete set null,
+  created_at    timestamptz not null default now()
+);
+create index if not exists tournament_extras_t_idx on public.tournament_extras (tournament_id, user_id);
+alter table public.tournament_extras enable row level security;
+drop policy if exists tournament_extras_select on public.tournament_extras;
+create policy tournament_extras_select on public.tournament_extras for select to authenticated
+  using (user_id = auth.uid() or public.is_club_staff(club_id) or public.is_superadmin());
+revoke all on public.tournament_extras from anon, authenticated;
+grant select on public.tournament_extras to authenticated;
+
+-- przeniesienie istniejących opłat dodatkowych (z księgi) do nowej tabeli
+insert into public.tournament_extras (tournament_id, club_id, user_id, amount, description, tx_id, created_by, created_at)
+select x.tournament_id, x.club_id, x.user_id, -x.amount,
+       left(coalesce(nullif(split_part(x.description, ':', 1), ''), 'Opłata dodatkowa'), 120),
+       case when t.status = 'closed' then x.id end, x.created_by, x.created_at
+from public.transactions x
+join public.tournaments t on t.id = x.tournament_id
+where x.type = 'tournament_extra'
+  and not exists (select 1 from public.tournament_extras e where e.tx_id = x.id);
+-- przy otwartych zapisach obciążenia wracają do „zaplanowanych”
+delete from public.transactions x
+using public.tournaments t
+where t.id = x.tournament_id and x.type = 'tournament_extra' and t.status <> 'closed';
+
+-- Przeliczenie: wpisowe po równo + naliczenie/cofnięcie opłat dodatkowych zależnie od statusu zapisów
+create or replace function public._tournament_recalc(p_tournament uuid)
+returns void language plpgsql volatile security definer set search_path = public as $$
+declare
+  t       public.tournaments%rowtype;
+  v_n     integer;
+  v_share numeric(10,2);
+  v_desc  text;
+  e       record;
+  v_tx    uuid;
+begin
+  select * into t from public.tournaments where id = p_tournament for update;
+  if not found then return; end if;
+
+  -- opłaty dodatkowe
+  if t.status = 'closed' then
+    for e in select * from public.tournament_extras where tournament_id = t.id and tx_id is null order by created_at
+    loop
+      insert into public.transactions (club_id, user_id, amount, type, description, tournament_id, booked_at, created_by)
+      values (t.club_id, e.user_id, -e.amount, 'tournament_extra', left(e.description || ': ' || t.name, 300), t.id,
+              (now() at time zone 'Europe/Warsaw')::date, coalesce(t.closed_by, e.created_by))
+      returning id into v_tx;
+      update public.tournament_extras set tx_id = v_tx where id = e.id;
+    end loop;
+  else
+    delete from public.transactions x
+    using public.tournament_extras te
+    where te.tournament_id = t.id and te.tx_id = x.id;   -- tx_id → null (on delete set null)
+  end if;
+
+  -- wpisowe
+  if t.status <> 'closed' or coalesce(t.entry_fee, 0) <= 0 then
+    delete from public.transactions where tournament_id = t.id and type = 'tournament_fee';
+    return;
+  end if;
+
+  select count(*) into v_n from public.tournament_signups where tournament_id = t.id;
+
+  delete from public.transactions x
+  where x.tournament_id = t.id and x.type = 'tournament_fee'
+    and not exists (select 1 from public.tournament_signups s where s.tournament_id = t.id and s.user_id = x.user_id);
+
+  if v_n = 0 then return; end if;
+
+  v_share := round(t.entry_fee / v_n, 2);
+  v_desc := left('Wpisowe: ' || t.name || ' (' || to_char(t.entry_fee, 'FM999990.00') || ' zł / ' || v_n || ' os.)', 300);
+
+  update public.transactions
+  set amount = -v_share, description = v_desc
+  where tournament_id = t.id and type = 'tournament_fee';
+
+  insert into public.transactions (club_id, user_id, amount, type, description, tournament_id, booked_at, created_by)
+  select t.club_id, s.user_id, -v_share, 'tournament_fee', v_desc, t.id,
+         (coalesce(t.closed_at, now()) at time zone 'Europe/Warsaw')::date, t.closed_by
+  from public.tournament_signups s
+  where s.tournament_id = t.id
+  on conflict do nothing;
+end $$;
+
+create or replace function public.staff_remove_tournament_signup(p_tournament uuid, p_user uuid)
+returns void language plpgsql volatile security definer set search_path = public as $$
+declare t public.tournaments%rowtype;
+begin
+  select * into t from public.tournaments where id = p_tournament for update;
+  if not found then raise exception 'Turniej nie istnieje.'; end if;
+  perform public._require_staff(t.club_id);
+  delete from public.tournament_signups where tournament_id = t.id and user_id = p_user;
+  delete from public.tournament_extras where tournament_id = t.id and user_id = p_user;
+  delete from public.transactions where tournament_id = t.id and user_id = p_user;
+  perform public._tournament_recalc(t.id);
+end $$;
+
+create or replace function public.add_tournament_extra(p_tournament uuid, p_users uuid[], p_amount numeric, p_description text)
+returns integer language plpgsql volatile security definer set search_path = public as $$
+declare
+  v_uid uuid := public._require_uid();
+  t     public.tournaments%rowtype;
+  v_n   integer;
+begin
+  select * into t from public.tournaments where id = p_tournament for update;
+  if not found then raise exception 'Turniej nie istnieje.'; end if;
+  perform public._require_staff(t.club_id);
+  perform public._assert_club_not_suspended(t.club_id);
+  if p_amount is null or p_amount <= 0 then raise exception 'Kwota musi być większa od zera.'; end if;
+  if coalesce(trim(p_description), '') = '' then raise exception 'Podaj, za co jest opłata (np. nocleg).'; end if;
+  if exists (select 1 from unnest(coalesce(p_users, '{}')) u
+             where not exists (select 1 from public.tournament_signups s where s.tournament_id = t.id and s.user_id = u)) then
+    raise exception 'Opłatę dodatkową można dodać tylko uczestnikom turnieju.';
+  end if;
+  insert into public.tournament_extras (tournament_id, club_id, user_id, amount, description, created_by)
+  select t.id, t.club_id, u, round(p_amount, 2), left(trim(p_description), 120), v_uid
+  from (select distinct unnest(coalesce(p_users, '{}')) as u) x;
+  get diagnostics v_n = row_count;
+  perform public._tournament_recalc(t.id);  -- po zamknięciu zapisów: od razu na saldo
+  return v_n;
+end $$;
+
+drop function if exists public.delete_tournament_extra(uuid);
+create or replace function public.delete_tournament_extra(p_extra uuid)
+returns void language plpgsql volatile security definer set search_path = public as $$
+declare e public.tournament_extras%rowtype;
+begin
+  select * into e from public.tournament_extras where id = p_extra;
+  if not found then raise exception 'Nie znaleziono opłaty dodatkowej.'; end if;
+  perform public._require_staff(e.club_id);
+  if e.tx_id is not null then delete from public.transactions where id = e.tx_id; end if;
+  delete from public.tournament_extras where id = e.id;
+end $$;
+
+drop function if exists public.tournament_participants(uuid);
+create or replace function public.tournament_participants(p_tournament uuid)
+returns table (
+  user_id uuid, added_by_staff boolean, signed_up_at timestamptz,
+  fee_amount numeric, fee_paid boolean, extras_amount numeric, extras_paid boolean, extras_planned boolean, extras jsonb
+)
+language plpgsql stable security definer set search_path = public as $$
+declare
+  v_uid   uuid := public._require_uid();
+  t       public.tournaments%rowtype;
+  v_staff boolean;
+begin
+  select * into t from public.tournaments where id = p_tournament;
+  if not found or not (public.is_club_member(t.club_id) or public.is_superadmin()) then
+    raise exception 'Nie masz dostępu do tego turnieju.' using errcode = '42501';
+  end if;
+  v_staff := public.is_club_staff(t.club_id) or public.is_superadmin();
+
+  return query
+  with paid as (
+    select x.id, x.user_id,
+           coalesce((select p.paid from public._paid_charges(t.club_id, x.user_id) p where p.tx_id = x.id), false) as paid
+    from public.transactions x
+    where x.tournament_id = t.id
+  ),
+  fee as (
+    select x.user_id, -x.amount as amt, pd.paid
+    from public.transactions x join paid pd on pd.id = x.id
+    where x.tournament_id = t.id and x.type = 'tournament_fee'
+  ),
+  ex as (
+    select e.id, e.user_id, e.amount as amt, e.description, e.created_at, e.tx_id is null as planned,
+           coalesce(pd.paid, false) as paid
+    from public.tournament_extras e left join paid pd on pd.id = e.tx_id
+    where e.tournament_id = t.id
+  )
+  select s.user_id, s.added_by_staff, s.signed_up_at,
+         case when v_staff or s.user_id = v_uid then (select sum(f.amt) from fee f where f.user_id = s.user_id) end,
+         (select bool_and(f.paid) from fee f where f.user_id = s.user_id),
+         case when v_staff or s.user_id = v_uid then (select sum(x.amt) from ex x where x.user_id = s.user_id) end,
+         (select bool_and(x.paid) from ex x where x.user_id = s.user_id and not x.planned),
+         (select bool_or(x.planned) from ex x where x.user_id = s.user_id),
+         case when v_staff or s.user_id = v_uid then
+           (select jsonb_agg(jsonb_build_object('id', x.id, 'amount', x.amt, 'description', x.description,
+                                                'paid', x.paid, 'planned', x.planned) order by x.created_at, x.id)
+            from ex x where x.user_id = s.user_id)
+         end
+  from public.tournament_signups s
+  where s.tournament_id = t.id
+  order by s.signed_up_at;
+end $$;
+
+revoke all on function public.delete_tournament_extra(uuid) from public, anon;
+revoke all on function public.tournament_participants(uuid) from public, anon;
+grant execute on function public.delete_tournament_extra(uuid) to authenticated;
+grant execute on function public.tournament_participants(uuid) to authenticated;
+
 -- Harmonogram: 1. dnia miesiąca o 05:00 UTC (06:00 zimą / 07:00 latem w Polsce)
 do $$
 begin
