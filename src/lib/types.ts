@@ -45,6 +45,7 @@ export interface ClubInfo {
   late_cancel_fee_enabled?: boolean;
   default_max_participants: number;
   default_location: string | null;
+  logo_url?: string | null;
 }
 
 export interface PlatformInfo {

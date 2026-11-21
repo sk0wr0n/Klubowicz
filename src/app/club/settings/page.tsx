@@ -1,12 +1,131 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Save } from 'lucide-react';
+import { ImagePlus, Save, Trash2, Volleyball } from 'lucide-react';
 import { useClub } from '@/lib/club';
 import { errMsg, supabase } from '@/lib/supabase';
 import OwnerGuard from '@/components/OwnerGuard';
 import { useToast } from '@/components/Toast';
 import { PageTitle, Spinner } from '@/components/ui';
+
+/** Wycina środek obrazka do kwadratu i zmniejsza do 512×512 (PNG). */
+async function toSquarePng(file: File, size = 512): Promise<Blob> {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const i = new Image();
+      i.onload = () => resolve(i);
+      i.onerror = () => reject(new Error('Nie udało się wczytać obrazka.'));
+      i.src = url;
+    });
+    const side = Math.min(img.naturalWidth, img.naturalHeight);
+    const sx = (img.naturalWidth - side) / 2;
+    const sy = (img.naturalHeight - side) / 2;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const c = canvas.getContext('2d')!;
+    c.fillStyle = '#ffffff';
+    c.fillRect(0, 0, size, size);
+    c.imageSmoothingQuality = 'high';
+    c.drawImage(img, sx, sy, side, side, 0, 0, size, size);
+    return await new Promise<Blob>((resolve, reject) =>
+      canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('Błąd konwersji obrazka.'))), 'image/png')
+    );
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+function LogoSection() {
+  const { clubId, ctx, reload } = useClub();
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  const logo = ctx.club.logo_url ?? null;
+
+  async function upload(file: File) {
+    if (!file.type.startsWith('image/')) {
+      toast('Wybierz plik graficzny (PNG, JPG).', 'error');
+      return;
+    }
+    setBusy(true);
+    try {
+      const blob = await toSquarePng(file);
+      const path = `${clubId}/logo-${Date.now()}.png`;
+      const sb = supabase();
+      const { error: upErr } = await sb.storage.from('club-logos').upload(path, blob, {
+        contentType: 'image/png',
+        cacheControl: '31536000',
+        upsert: false,
+      });
+      if (upErr) throw upErr;
+      const { data } = sb.storage.from('club-logos').getPublicUrl(path);
+      const { error } = await sb.rpc('set_club_logo', { p_club: clubId, p_url: data.publicUrl });
+      if (error) throw error;
+      toast('Zapisano logo klubu.');
+      await reload();
+    } catch (e) {
+      toast(errMsg(e), 'error');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove() {
+    setBusy(true);
+    const { error } = await supabase().rpc('set_club_logo', { p_club: clubId, p_url: null });
+    setBusy(false);
+    if (error) toast(errMsg(error), 'error');
+    else {
+      toast('Przywrócono domyślną ikonę.');
+      await reload();
+    }
+  }
+
+  return (
+    <div className="card flex flex-col gap-3">
+      <h2 className="font-semibold">Logo klubu</h2>
+      <div className="flex items-center gap-4">
+        <span
+          className={`flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-2xl shadow ${
+            logo ? 'bg-white ring-1 ring-slate-200' : 'bg-indigo-600 text-white'
+          }`}
+        >
+          {logo ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={logo} alt="Logo klubu" className="h-full w-full object-cover" />
+          ) : (
+            <Volleyball className="h-10 w-10" />
+          )}
+        </span>
+        <div className="flex flex-col gap-2">
+          <label className={`btn btn-secondary btn-sm cursor-pointer ${busy ? 'pointer-events-none opacity-60' : ''}`}>
+            {busy ? <Spinner className="h-4 w-4" /> : <ImagePlus className="h-4 w-4" />} {logo ? 'Zmień logo' : 'Wgraj logo'}
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                e.target.value = '';
+                if (f) void upload(f);
+              }}
+            />
+          </label>
+          {logo && (
+            <button type="button" className="btn btn-ghost btn-sm text-red-600" disabled={busy} onClick={() => void remove()}>
+              <Trash2 className="h-4 w-4" /> Przywróć piłkę
+            </button>
+          )}
+        </div>
+      </div>
+      <p className="text-xs text-slate-500">
+        Najlepiej kwadratowy obrazek (PNG/JPG). Wytniemy środek i zmniejszymy do 512×512. Logo pokaże się w nagłówku aplikacji
+        u wszystkich członków klubu i jako ikona przy dodawaniu aplikacji do ekranu głównego iPhone’a.
+      </p>
+    </div>
+  );
+}
 
 export default function SettingsPage() {
   const { clubId, ctx, reload } = useClub();
@@ -78,6 +197,9 @@ export default function SettingsPage() {
   return (
     <OwnerGuard>
       <PageTitle title="Ustawienia klubu" subtitle={`Prefiks kodów zawodników: ${c.prefix}`} />
+      <div className="mb-4">
+        <LogoSection />
+      </div>
       <form onSubmit={save} className="flex flex-col gap-4">
         <div className="card flex flex-col gap-3">
           <h2 className="font-semibold">Klub</h2>

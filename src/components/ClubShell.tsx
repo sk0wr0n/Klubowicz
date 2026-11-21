@@ -77,6 +77,17 @@ export default function ClubShell({ children }: { children: ReactNode }) {
     };
   }, [ctx, members, clubId, reload, reloadMembers]);
 
+  // Logo klubu jako ikona karty i ikona „Dodaj do ekranu początkowego” (iPhone czyta ją z bieżącej strony)
+  const logo = ctx?.club.logo_url ?? null;
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const set = (rel: string, href: string) => {
+      document.querySelectorAll<HTMLLinkElement>(`link[rel="${rel}"]`).forEach((l) => (l.href = href));
+    };
+    set('apple-touch-icon', logo ?? '/icons/apple-touch-icon.png');
+    set('icon', logo ?? '/icons/icon-192.png');
+  }, [logo]);
+
   if (!ok) return <FullScreenLoader />;
   if (error) {
     return (
@@ -109,7 +120,7 @@ export default function ClubShell({ children }: { children: ReactNode }) {
 
   return (
     <ClubContext.Provider value={value}>
-      <AppHeader clubId={clubId} clubName={value.ctx.club.name} />
+      <AppHeader clubId={clubId} clubName={value.ctx.club.name} clubLogo={value.ctx.club.logo_url} />
       <SubscriptionBanner />
       <MyPositionModal />
       <main className="mx-auto max-w-3xl p-4 pb-28">{children}</main>

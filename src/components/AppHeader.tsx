@@ -10,7 +10,15 @@ import { Avatar } from './ui';
 import { openInstallHelp } from './InstallHelp';
 import { openPositionModal } from './Position';
 
-export default function AppHeader({ clubId, clubName }: { clubId?: string; clubName?: string }) {
+export default function AppHeader({
+  clubId,
+  clubName,
+  clubLogo,
+}: {
+  clubId?: string;
+  clubName?: string;
+  clubLogo?: string | null;
+}) {
   const { profile, memberships, signOut } = useAuth();
   const [clubOpen, setClubOpen] = useState(false);
   const [userOpen, setUserOpen] = useState(false);
@@ -34,9 +42,16 @@ export default function AppHeader({ clubId, clubName }: { clubId?: string; clubN
           <Link
             href={homeHref}
             aria-label="Strona główna"
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo-600 text-white shadow-sm transition active:scale-95"
+            className={`flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg shadow-sm transition active:scale-95 ${
+              clubLogo ? 'bg-white ring-1 ring-slate-200' : 'bg-indigo-600 text-white'
+            }`}
           >
-            <Volleyball className="h-5 w-5" />
+            {clubLogo ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={clubLogo} alt="" className="h-full w-full object-cover" />
+            ) : (
+              <Volleyball className="h-5 w-5" />
+            )}
           </Link>
           {canSwitch ? (
             <button

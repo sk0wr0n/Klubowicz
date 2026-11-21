@@ -833,7 +833,8 @@ begin
       'cancellation_deadline_hours', v_club.cancellation_deadline_hours,
       'late_cancel_fee_enabled', v_club.late_cancel_fee_enabled,
       'default_max_participants', v_club.default_max_participants,
-      'default_location', v_club.default_location
+      'default_location', v_club.default_location,
+      'logo_url', v_club.logo_url
     ),
     'my_role', v_member.role,
     'my_member_id', v_member.id,
@@ -3053,6 +3054,40 @@ begin
   end if;
   update public.club_members set role = p_role where id = p_member_id;
 end $$;
+
+-- Logo klubu (Właściciel wgrywa obrazek do Storage „club-logos/<club_id>/…”)
+alter table public.clubs add column if not exists logo_url text check (logo_url is null or logo_url ~* '^https://');
+grant select (logo_url) on public.clubs to authenticated;
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('club-logos', 'club-logos', true, 2097152, array['image/png', 'image/jpeg', 'image/webp'])
+on conflict (id) do update set public = true, file_size_limit = excluded.file_size_limit, allowed_mime_types = excluded.allowed_mime_types;
+
+drop policy if exists club_logos_select on storage.objects;
+create policy club_logos_select on storage.objects for select to authenticated
+  using (bucket_id = 'club-logos' and public.is_club_member(((storage.foldername(name))[1])::uuid));
+drop policy if exists club_logos_insert on storage.objects;
+create policy club_logos_insert on storage.objects for insert to authenticated
+  with check (bucket_id = 'club-logos' and public.is_club_owner(((storage.foldername(name))[1])::uuid));
+drop policy if exists club_logos_update on storage.objects;
+create policy club_logos_update on storage.objects for update to authenticated
+  using (bucket_id = 'club-logos' and public.is_club_owner(((storage.foldername(name))[1])::uuid));
+drop policy if exists club_logos_delete on storage.objects;
+create policy club_logos_delete on storage.objects for delete to authenticated
+  using (bucket_id = 'club-logos' and public.is_club_owner(((storage.foldername(name))[1])::uuid));
+
+create or replace function public.set_club_logo(p_club uuid, p_url text)
+returns void language plpgsql volatile security definer set search_path = public as $$
+declare v_url text := nullif(trim(coalesce(p_url, '')), '');
+begin
+  perform public._require_owner(p_club);
+  if v_url is not null and v_url not like 'https://yjvzwakzsiobjujqrwwr.supabase.co/storage/v1/object/public/club-logos/' || p_club::text || '/%' then
+    raise exception 'Nieprawidłowy adres logo.';
+  end if;
+  update public.clubs set logo_url = v_url where id = p_club;
+end $$;
+revoke all on function public.set_club_logo(uuid, text) from public, anon;
+grant execute on function public.set_club_logo(uuid, text) to authenticated;
 
 -- Harmonogram: 1. dnia miesiąca o 05:00 UTC (06:00 zimą / 07:00 latem w Polsce)
 do $$
