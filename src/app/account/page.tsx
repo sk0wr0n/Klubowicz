@@ -93,6 +93,11 @@ function AccountInner() {
     if (profileLoaded) setName(profile?.full_name ?? '');
   }, [profileLoaded, profile]);
 
+  // Ekran „Uzupełnij profil” tylko wtedy, gdy naprawdę brakuje imienia i nazwiska
+  useEffect(() => {
+    if (first && profileLoaded && profile?.full_name?.trim()) router.replace('/');
+  }, [first, profileLoaded, profile, router]);
+
   if (!ok || !profileLoaded) return <FullScreenLoader />;
 
   async function save(e: React.FormEvent) {

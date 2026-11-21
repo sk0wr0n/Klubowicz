@@ -15,6 +15,8 @@ interface AuthState {
   email: string | null;
   profile: Profile | null;
   profileLoaded: boolean;
+  /** profil nie dał się wczytać (np. chwilowy brak sieci) – nie traktuj jak braku imienia */
+  profileError: boolean;
   memberships: Membership[];
   membershipsLoaded: boolean;
   refreshProfile: () => Promise<void>;
@@ -30,6 +32,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [profileLoaded, setProfileLoaded] = useState(false);
+  const [profileError, setProfileError] = useState(false);
   const [memberships, setMemberships] = useState<Membership[]>([]);
   const [membershipsLoaded, setMembershipsLoaded] = useState(false);
 
@@ -59,18 +62,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const userId = session?.user.id ?? null;
 
+  // Po powrocie aplikacji z tła pierwsze zapytanie potrafi się nie udać (wygasły token, brak sieci).
+  // Wtedy ponawiamy i NIE traktujemy tego jak braku imienia/klubów – inaczej aplikacja
+  // niepotrzebnie wysyłała na ekran „Uzupełnij profil” albo „Brak klubów”.
   const refreshProfile = useCallback(async () => {
     if (!userId) {
       setProfile(null);
       setProfileLoaded(true);
       return;
     }
-    const { data } = await supabase()
-      .from('profiles')
-      .select('id, full_name, avatar_url, is_superadmin')
-      .eq('id', userId)
-      .maybeSingle();
-    setProfile((data as Profile | null) ?? null);
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const { data, error } = await supabase()
+        .from('profiles')
+        .select('id, full_name, avatar_url, is_superadmin')
+        .eq('id', userId)
+        .maybeSingle();
+      if (!error && data) {
+        setProfile(data as Profile);
+        setProfileError(false);
+        setProfileLoaded(true);
+        return;
+      }
+      if (!error && !data && attempt >= 1) break; // naprawdę brak profilu
+      await new Promise((r) => setTimeout(r, 700 * (attempt + 1)));
+    }
+    setProfileError(true);
     setProfileLoaded(true);
   }, [userId]);
 
@@ -80,11 +96,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setMembershipsLoaded(true);
       return [];
     }
-    const { data, error } = await supabase().rpc('my_memberships');
-    const list = error ? [] : ((data ?? []) as Membership[]);
-    setMemberships(list);
-    setMembershipsLoaded(true);
-    return list;
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const { data, error } = await supabase().rpc('my_memberships');
+      if (!error) {
+        const list = (data ?? []) as Membership[];
+        setMemberships(list);
+        setMembershipsLoaded(true);
+        return list;
+      }
+      await new Promise((r) => setTimeout(r, 700 * (attempt + 1)));
+    }
+    setMembershipsLoaded(true); // zostawiamy poprzednią listę
+    return [];
   }, [userId]);
 
   useEffect(() => {
@@ -117,6 +140,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         email: session?.user.email ?? null,
         profile,
         profileLoaded,
+        profileError,
         memberships,
         membershipsLoaded,
         refreshProfile,

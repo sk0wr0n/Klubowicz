@@ -15,7 +15,7 @@ import { FullScreenLoader } from '@/components/ui';
  */
 export default function HomePage() {
   const router = useRouter();
-  const { ready, session, profile, profileLoaded, memberships, membershipsLoaded } = useAuth();
+  const { ready, session, profile, profileLoaded, profileError, memberships, membershipsLoaded } = useAuth();
 
   useEffect(() => {
     if (!ready) return;
@@ -24,7 +24,7 @@ export default function HomePage() {
       return;
     }
     if (!profileLoaded || !membershipsLoaded) return;
-    if (!profile?.full_name?.trim()) {
+    if (!profileError && !profile?.full_name?.trim()) {
       router.replace('/account/?first=1');
       return;
     }
@@ -35,7 +35,7 @@ export default function HomePage() {
     } else {
       router.replace('/clubs/');
     }
-  }, [ready, session, profile, profileLoaded, memberships, membershipsLoaded, router]);
+  }, [ready, session, profile, profileLoaded, profileError, memberships, membershipsLoaded, router]);
 
   return <FullScreenLoader />;
 }
