@@ -245,11 +245,14 @@ returns boolean language sql stable security definer set search_path = public as
 $$;
 
 create or replace function public._require_uid()
-returns uuid language plpgsql stable set search_path = public as $$
+returns uuid language plpgsql stable security definer set search_path = public as $$
 declare v uuid := auth.uid();
 begin
   if v is null then
     raise exception 'Musisz być zalogowany.' using errcode = '28000';
+  end if;
+  if not exists (select 1 from public.profiles where id = v) then
+    raise exception 'To konto zostało usunięte. Wyloguj się i zarejestruj ponownie.' using errcode = '28000';
   end if;
   return v;
 end $$;

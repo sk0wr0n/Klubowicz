@@ -83,7 +83,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setProfileLoaded(true);
         return;
       }
-      if (!error && !data && attempt >= 1) break; // naprawdę brak profilu
+      if (!error && !data && attempt >= 1) {
+        // konto zostało usunięte, a w telefonie została stara sesja – wyloguj, żeby można było zarejestrować się od nowa
+        const { data: u } = await supabase().auth.getUser();
+        if (!u.user) {
+          markSigningOut();
+          await supabase().auth.signOut();
+          setSession(null);
+          if (typeof window !== 'undefined') window.location.href = '/login/';
+          return;
+        }
+        break;
+      }
       await new Promise((r) => setTimeout(r, 700 * (attempt + 1)));
     }
     setProfileError(true);
