@@ -2,14 +2,15 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { ChevronLeft, ChevronRight, Lightbulb, Pencil, Plus, Target, Trash2, Users, Volleyball, Wallet } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, Lightbulb, Pencil, Plus, RotateCcw, Target, Trash2, Users, Volleyball, Wallet } from 'lucide-react';
+import type { ReactNode } from 'react';
 import { useClub } from '@/lib/club';
 import { errMsg, supabase } from '@/lib/supabase';
 import { currentPeriod, formatShortDay, formatTime, money, periodLabel } from '@/lib/format';
-import { trainingHref } from '@/lib/nav';
+import { clubHref, trainingHref } from '@/lib/nav';
 import OwnerGuard from '@/components/OwnerGuard';
 import { useToast } from '@/components/Toast';
-import { ConfirmModal, ErrorBox, Modal, PageTitle, Spinner } from '@/components/ui';
+import { ConfirmModal, EmptyState, ErrorBox, Modal, PageTitle, Spinner } from '@/components/ui';
 
 interface BudgetItem {
   id: string;
@@ -33,6 +34,8 @@ interface Overview {
   monthly_fee: number;
   single_fee: number;
   items: BudgetItem[];
+  items_custom: boolean;
+  can_edit: boolean;
   monthly: { members: number; charged_count: number; charged: number; expected: number; expected_count: number };
   avg_per_session: number;
   trainings: BudgetTraining[];
@@ -55,13 +58,30 @@ interface Suggestion {
   single: number | null;
 }
 
+type Scope = 'month' | 'all';
+
+function BudgetGuard({ children }: { children: ReactNode }) {
+  const { isFinance, ctx, clubId } = useClub();
+  if (isFinance) return <OwnerGuard allowFinance>{children}</OwnerGuard>;
+  if (!ctx.club.budget_public)
+    return <EmptyState title="Brak dostępu">Budżet klubu widzą Właściciel i Skarbnik.</EmptyState>;
+  return (
+    <>
+      <Link href={clubHref(clubId, 'finance')} className="mb-3 inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800">
+        <ArrowLeft className="h-4 w-4" /> Finanse
+      </Link>
+      {children}
+    </>
+  );
+}
+
 export default function BudgetPage() {
   const { clubId, isOwner, reload } = useClub();
   const toast = useToast();
   const [period, setPeriod] = useState(currentPeriod());
   const [data, setData] = useState<Overview | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [edit, setEdit] = useState<{ id: string | null; name: string; amount: string } | null>(null);
+  const [edit, setEdit] = useState<{ id: string | null; name: string; amount: string; scope: Scope } | null>(null);
   const [busy, setBusy] = useState(false);
   const [delItem, setDelItem] = useState<BudgetItem | null>(null);
   const [apply, setApply] = useState<Suggestion | null>(null);
@@ -166,9 +186,11 @@ export default function BudgetPage() {
     setBusy(true);
     const { error } = await supabase().rpc('save_budget_item', {
       p_club: clubId,
+      p_period: period,
       p_id: edit.id,
       p_name: edit.name,
       p_amount: amount,
+      p_scope: edit.scope,
     });
     setBusy(false);
     if (error) toast(errMsg(error), 'error');
@@ -178,14 +200,30 @@ export default function BudgetPage() {
     }
   }
 
-  async function removeItem() {
+  async function removeItem(scope: Scope) {
     if (!delItem) return;
     setBusy(true);
-    const { error } = await supabase().rpc('delete_budget_item', { p_id: delItem.id });
+    const { error } = await supabase().rpc('delete_budget_item', {
+      p_club: clubId,
+      p_period: period,
+      p_id: delItem.id,
+      p_scope: scope,
+    });
     setBusy(false);
     setDelItem(null);
     if (error) toast(errMsg(error), 'error');
     else await load();
+  }
+
+  async function resetMonth() {
+    setBusy(true);
+    const { error } = await supabase().rpc('reset_budget_month', { p_club: clubId, p_period: period });
+    setBusy(false);
+    if (error) toast(errMsg(error), 'error');
+    else {
+      toast('Przywrócono stałe koszty w tym miesiącu.');
+      await load();
+    }
   }
 
   async function applySuggestion() {
@@ -207,10 +245,12 @@ export default function BudgetPage() {
   }
 
   const isCurrent = period === currentPeriod();
+  const canEdit = data?.can_edit === true;
+  const monthName = periodLabel(period).split(' ')[0];
   const pct = (v: number) => (calc && calc.target > 0 ? Math.min(100, Math.round((v / calc.target) * 100)) : 0);
 
   return (
-    <OwnerGuard allowFinance>
+    <BudgetGuard>
       <PageTitle title="Budżet miesiąca" subtitle="Cel kosztów vs składki i opłaty za treningi" />
 
       <div className="mb-4 flex items-center justify-between rounded-xl bg-white p-1 shadow-sm ring-1 ring-slate-200">
@@ -241,7 +281,9 @@ export default function BudgetPage() {
             </div>
             {calc.target === 0 ? (
               <p className="text-sm text-slate-500">
-                Dodaj poniżej koszty miesięczne (np. sala, księgowa), żeby zobaczyć, jak daleko jesteście od celu.
+                {canEdit
+                  ? 'Dodaj poniżej koszty miesięczne (np. sala, księgowa), żeby zobaczyć, jak daleko jesteście od celu.'
+                  : 'Cel na ten miesiąc nie jest jeszcze ustawiony.'}
               </p>
             ) : (
               <>
@@ -324,6 +366,7 @@ export default function BudgetPage() {
                 </span>
                 <span className="font-semibold text-indigo-500">{money(calc.forecastEntries * calc.fs)}</span>
               </li>
+              {canEdit && (
               <li className="flex items-center gap-3 py-2.5">
                 <Wallet className="h-5 w-5 shrink-0 text-slate-400" />
                 <span className="min-w-0 flex-1">
@@ -332,6 +375,7 @@ export default function BudgetPage() {
                 </span>
                 <span className="font-semibold text-slate-600">{money(data.payments_in)}</span>
               </li>
+              )}
             </ul>
             {calc.fs > 0 && calc.fm > 0 && (
               <p className="mt-2 text-[11px] text-slate-400">
@@ -341,7 +385,7 @@ export default function BudgetPage() {
           </div>
 
           {/* PODPOWIEDŹ */}
-          {calc.target > 0 && (
+          {canEdit && calc.target > 0 && (
             <div className={`card ${calc.gap > 0 ? 'border-amber-300 bg-amber-50/60' : 'border-emerald-200 bg-emerald-50/50'}`}>
               <h2 className="mb-1 flex items-center gap-2 font-semibold">
                 <Lightbulb className={`h-5 w-5 ${calc.gap > 0 ? 'text-amber-600' : 'text-emerald-600'}`} /> Podpowiedź
@@ -386,29 +430,52 @@ export default function BudgetPage() {
           {/* KOSZTY */}
           <div className="card">
             <div className="mb-2 flex items-center justify-between">
-              <h2 className="font-semibold">Koszty miesięczne (cel)</h2>
-              <button className="btn btn-secondary btn-sm" onClick={() => setEdit({ id: null, name: '', amount: '' })}>
-                <Plus className="h-4 w-4" /> Dodaj
-              </button>
+              <h2 className="font-semibold">
+                Koszty – <span className="capitalize">{monthName}</span>
+              </h2>
+              {canEdit && (
+                <button
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => setEdit({ id: null, name: '', amount: '', scope: data.items.length === 0 && !data.items_custom ? 'all' : 'month' })}
+                >
+                  <Plus className="h-4 w-4" /> Dodaj
+                </button>
+              )}
             </div>
+            {data.items_custom && (
+              <div className="mb-2 flex items-center justify-between gap-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                <span>Kwoty ustawione tylko dla tego miesiąca.</span>
+                {canEdit && (
+                  <button className="inline-flex items-center gap-1 font-semibold" disabled={busy} onClick={() => void resetMonth()}>
+                    <RotateCcw className="h-3.5 w-3.5" /> Przywróć stałe
+                  </button>
+                )}
+              </div>
+            )}
             {data.items.length === 0 ? (
-              <p className="text-sm text-slate-500">Brak pozycji. Dodaj np. „Sala – 1500 zł”, „Księgowa – 150 zł”.</p>
+              <p className="text-sm text-slate-500">
+                {canEdit ? 'Brak pozycji. Dodaj np. „Sala – 1500 zł”, „Księgowa – 150 zł”.' : 'Brak pozycji.'}
+              </p>
             ) : (
               <ul className="divide-y divide-slate-100">
                 {data.items.map((i) => (
                   <li key={i.id} className="flex items-center gap-2 py-2">
                     <span className="min-w-0 flex-1 truncate text-sm">{i.name}</span>
                     <span className="text-sm font-semibold">{money(i.amount)}</span>
-                    <button
-                      className="btn btn-ghost btn-sm px-2"
-                      aria-label="Edytuj"
-                      onClick={() => setEdit({ id: i.id, name: i.name, amount: String(i.amount) })}
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </button>
-                    <button className="btn btn-ghost btn-sm px-2 text-red-600" aria-label="Usuń" onClick={() => setDelItem(i)}>
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+                    {canEdit && (
+                      <>
+                        <button
+                          className="btn btn-ghost btn-sm px-2"
+                          aria-label="Edytuj"
+                          onClick={() => setEdit({ id: i.id, name: i.name, amount: String(i.amount), scope: 'month' })}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </button>
+                        <button className="btn btn-ghost btn-sm px-2 text-red-600" aria-label="Usuń" onClick={() => setDelItem(i)}>
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </>
+                    )}
                   </li>
                 ))}
                 <li className="flex justify-between py-2 text-sm font-bold">
@@ -417,7 +484,11 @@ export default function BudgetPage() {
                 </li>
               </ul>
             )}
-            <p className="mt-1 text-[11px] text-slate-400">Te same koszty obowiązują w każdym miesiącu.</p>
+            {canEdit && (
+              <p className="mt-1 text-[11px] text-slate-400">
+                Stałe koszty obowiązują co miesiąc. Gdy faktura w danym miesiącu jest inna (np. święta), zmień kwotę „tylko w tym miesiącu”.
+              </p>
+            )}
           </div>
 
           {/* TRENINGI */}
@@ -480,6 +551,29 @@ export default function BudgetPage() {
                 onChange={(e) => setEdit({ ...edit, amount: e.target.value })}
               />
             </label>
+            <div>
+              <span className="label">Dotyczy</span>
+              <div className="grid grid-cols-2 gap-2">
+                {(
+                  [
+                    ['month', 'Tylko ten miesiąc', 'np. niższa faktura w święta'],
+                    ['all', 'Ten i kolejne miesiące', 'stała kwota; poprzednie bez zmian'],
+                  ] as const
+                ).map(([v, t, d]) => (
+                  <button
+                    key={v}
+                    type="button"
+                    onClick={() => setEdit({ ...edit, scope: v })}
+                    className={`rounded-xl border p-2.5 text-left text-sm ${
+                      edit.scope === v ? 'border-indigo-500 bg-indigo-50 ring-1 ring-indigo-500' : 'border-slate-200'
+                    }`}
+                  >
+                    <span className="block font-semibold">{t}</span>
+                    <span className="block text-[11px] text-slate-500">{d}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
             <button className="btn btn-primary" disabled={busy || !edit.name.trim() || !edit.amount.trim()}>
               {busy ? <Spinner className="h-4 w-4" /> : 'Zapisz'}
             </button>
@@ -487,16 +581,21 @@ export default function BudgetPage() {
         )}
       </Modal>
 
-      <ConfirmModal
-        open={delItem !== null}
-        title="Usunąć koszt?"
-        message={delItem ? `${delItem.name} – ${money(delItem.amount)}` : ''}
-        confirmText="Usuń"
-        danger
-        busy={busy}
-        onConfirm={() => void removeItem()}
-        onClose={() => setDelItem(null)}
-      />
+      <Modal open={delItem !== null} onClose={() => setDelItem(null)} title="Usunąć koszt?">
+        {delItem && (
+          <div className="flex flex-col gap-2">
+            <p className="mb-1 text-sm text-slate-600">
+              {delItem.name} – {money(delItem.amount)}
+            </p>
+            <button className="btn btn-secondary" disabled={busy} onClick={() => void removeItem('month')}>
+              Usuń tylko w tym miesiącu
+            </button>
+            <button className="btn btn-danger" disabled={busy} onClick={() => void removeItem('all')}>
+              Usuń na stałe (ten i kolejne miesiące)
+            </button>
+          </div>
+        )}
+      </Modal>
       <ConfirmModal
         open={apply !== null}
         title="Zmienić stawki?"
@@ -527,6 +626,6 @@ export default function BudgetPage() {
         onConfirm={() => void applySuggestion()}
         onClose={() => setApply(null)}
       />
-    </OwnerGuard>
+    </BudgetGuard>
   );
 }

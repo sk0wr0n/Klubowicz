@@ -11,21 +11,24 @@ import { clubHref } from '@/lib/nav';
 interface Mini {
   target: number;
   secured: number;
+  forecast: number;
 }
 
 /** Skrót budżetu miesiąca (Właściciel/Skarbnik) na stronie Finanse. */
 export default function BudgetMini() {
-  const { clubId, isFinance } = useClub();
+  const { clubId, isFinance, ctx } = useClub();
+  const visible = isFinance || ctx.club.budget_public === true;
   const [m, setM] = useState<Mini | null>(null);
 
   useEffect(() => {
-    if (!isFinance) return;
+    if (!visible) return;
     void supabase()
       .rpc('budget_overview', { p_club: clubId, p_period: null })
       .then(({ data }) => {
         if (!data) return;
         const d = data as {
           single_fee: number;
+          avg_per_session: number;
           items: { amount: number }[];
           monthly: { expected: number };
           trainings: { status: string; charged: number; per_session_signed: number }[];
@@ -37,11 +40,19 @@ export default function BudgetMini() {
             (s, t) => s + (t.status === 'settled' ? Number(t.charged) : t.per_session_signed * Number(d.single_fee)),
             0
           );
-        setM({ target, secured });
+        const avg = Math.round(Number(d.avg_per_session ?? 0));
+        const forecast =
+          Number(d.monthly.expected) +
+          d.trainings.reduce(
+            (s, t) =>
+              s + (t.status === 'settled' ? Number(t.charged) : Math.max(t.per_session_signed, avg) * Number(d.single_fee)),
+            0
+          );
+        setM({ target, secured, forecast });
       });
-  }, [clubId, isFinance]);
+  }, [clubId, visible]);
 
-  if (!isFinance) return null;
+  if (!visible) return null;
   const pct = m && m.target > 0 ? Math.min(100, Math.round((m.secured / m.target) * 100)) : 0;
   return (
     <Link href={clubHref(clubId, 'budget')} className="card mb-4 block border-indigo-200 transition hover:border-indigo-400">
@@ -53,8 +64,14 @@ export default function BudgetMini() {
             {!m
               ? 'Ładowanie…'
               : m.target === 0
-                ? 'Ustaw cel miesiąca (sala, księgowa…)'
-                : `${money(m.secured)} z ${money(m.target)} (${pct}%)`}
+                ? isFinance
+                  ? 'Ustaw cel miesiąca (sala, księgowa…)'
+                  : 'Cel miesiąca nie jest jeszcze ustawiony'
+                : `${money(m.secured)} z ${money(m.target)} (${pct}%) · ${
+                    m.forecast >= m.target
+                      ? `prognoza: na plus ${money(m.forecast - m.target)}`
+                      : `prognoza: brakuje ${money(m.target - m.forecast)}`
+                  }`}
           </span>
         </span>
         <ChevronRight className="h-5 w-5 text-slate-400" />

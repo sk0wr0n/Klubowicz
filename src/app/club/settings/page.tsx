@@ -114,6 +114,19 @@ export default function SettingsPage() {
   const [busy, setBusy] = useState(false);
   const lateOn = c.late_cancel_fee_enabled !== false;
   const [lateBusy, setLateBusy] = useState(false);
+  const budgetOn = c.budget_public === true;
+  const [budgetBusy, setBudgetBusy] = useState(false);
+
+  async function toggleBudget() {
+    setBudgetBusy(true);
+    const { error } = await supabase().rpc('set_budget_public', { p_club: clubId, p_public: !budgetOn });
+    setBudgetBusy(false);
+    if (error) toast(errMsg(error), 'error');
+    else {
+      toast(budgetOn ? 'Budżet widzi już tylko sztab finansowy.' : 'Budżet miesiąca widzą teraz wszyscy członkowie.');
+      await reload();
+    }
+  }
 
   async function toggleLate() {
     setLateBusy(true);
@@ -171,6 +184,30 @@ export default function SettingsPage() {
       <PageTitle title="Ustawienia klubu" subtitle={`Prefiks kodów zawodników: ${c.prefix}`} />
       <div className="mb-4">
         <LogoSection />
+      </div>
+      <div className="card mb-4">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-sm font-semibold">Pokaż budżet wszystkim</p>
+            <p className="mt-0.5 text-xs text-slate-500">
+              {budgetOn
+                ? 'Włączone – każdy członek widzi w Finansach, ile brakuje do celu miesiąca (np. na salę) albo ile jest na plus, w złotówkach i procentach. Nie widać sald ani wpłat poszczególnych osób.'
+                : 'Wyłączone – budżet miesiąca widzi tylko Właściciel i Skarbnik.'}
+            </p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={budgetOn}
+            disabled={budgetBusy}
+            onClick={() => void toggleBudget()}
+            className={`relative h-7 w-12 shrink-0 rounded-full transition-colors ${budgetOn ? 'bg-indigo-600' : 'bg-slate-300'}`}
+          >
+            <span
+              className={`absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-all ${budgetOn ? 'left-[22px]' : 'left-0.5'}`}
+            />
+          </button>
+        </div>
       </div>
       <form onSubmit={save} className="flex flex-col gap-4">
         <div className="card flex flex-col gap-3">

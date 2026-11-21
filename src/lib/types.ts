@@ -47,6 +47,7 @@ export interface ClubInfo {
   default_max_participants: number;
   default_location: string | null;
   logo_url?: string | null;
+  budget_public?: boolean;
 }
 
 export interface PlatformInfo {

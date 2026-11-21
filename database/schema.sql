@@ -3565,6 +3565,243 @@ grant execute on function public.delete_budget_item(uuid) to authenticated;
 grant execute on function public.set_club_fees(uuid, numeric, numeric) to authenticated;
 grant execute on function public.budget_overview(uuid, text) to authenticated;
 
+-- =====================================================================
+-- BUDŻET: koszty per miesiąc (np. niższa faktura w grudniu) + przełącznik „pokaż budżet wszystkim”
+--   * club_budget_items.period IS NULL  → stałe koszty (każdy miesiąc bez własnych ustawień)
+--   * club_budget_items.period = 'RRRR-MM' → koszty ustawione tylko dla tego miesiąca
+--   * club_budget_months – lista miesięcy z własnymi ustawieniami
+-- Zmiana stałych kosztów nie zmienia przeszłych miesięcy (są „zamrażane” przed zmianą).
+-- =====================================================================
+
+alter table public.club_budget_items add column if not exists period text
+  check (period is null or period ~ '^[0-9]{4}-(0[1-9]|1[0-2])$');
+alter table public.club_budget_items add column if not exists base_id uuid
+  references public.club_budget_items (id) on delete set null;
+create index if not exists club_budget_items_period_idx on public.club_budget_items (club_id, period);
+
+create table if not exists public.club_budget_months (
+  club_id    uuid not null references public.clubs (id) on delete cascade,
+  period     text not null check (period ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'),
+  created_at timestamptz not null default now(),
+  primary key (club_id, period)
+);
+alter table public.club_budget_months enable row level security;
+revoke all on public.club_budget_months from anon, authenticated;
+
+alter table public.clubs add column if not exists budget_public boolean not null default false;
+grant select (budget_public) on public.clubs to authenticated;
+
+-- Właściciel/Skarbnik albo (gdy budżet jawny) każdy aktywny członek
+create or replace function public.can_see_budget(p_club uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select public.is_club_finance(p_club) or public.is_superadmin()
+      or (public.is_club_member(p_club) and coalesce((select c.budget_public from public.clubs c where c.id = p_club), false));
+$$;
+
+drop policy if exists club_budget_items_select on public.club_budget_items;
+create policy club_budget_items_select on public.club_budget_items for select to authenticated
+  using (public.can_see_budget(club_id));
+
+create or replace function public._period_add(p text, n integer)
+returns text language sql immutable as $$
+  select to_char((p || '-01')::date + make_interval(months => n), 'YYYY-MM');
+$$;
+
+-- Skopiuj stałe koszty do miesiąca (jeśli nie ma jeszcze własnych ustawień)
+create or replace function public._budget_materialize(p_club uuid, p_period text)
+returns void language plpgsql volatile security definer set search_path = public as $$
+begin
+  if exists (select 1 from public.club_budget_months where club_id = p_club and period = p_period) then return; end if;
+  insert into public.club_budget_months (club_id, period) values (p_club, p_period);
+  insert into public.club_budget_items (club_id, name, amount, sort, period, base_id)
+  select club_id, name, amount, sort, p_period, id from public.club_budget_items
+  where club_id = p_club and period is null;
+end $$;
+
+-- Zamroź wcześniejsze miesiące (od założenia klubu) przed zmianą stałych kosztów
+create or replace function public._budget_freeze_before(p_club uuid, p_period text)
+returns void language plpgsql volatile security definer set search_path = public as $$
+declare
+  v_m text;
+begin
+  if not exists (select 1 from public.club_budget_items where club_id = p_club and period is null) then return; end if;
+  -- od miesiąca, w którym zaczęto prowadzić budżet (pierwsza stała pozycja)
+  select to_char(min(i.created_at) at time zone 'Europe/Warsaw', 'YYYY-MM') into v_m
+  from public.club_budget_items i where i.club_id = p_club;
+  while v_m < p_period loop
+    perform public._budget_materialize(p_club, v_m);
+    v_m := public._period_add(v_m, 1);
+  end loop;
+end $$;
+
+drop function if exists public.save_budget_item(uuid, uuid, text, numeric);
+drop function if exists public.delete_budget_item(uuid);
+
+-- p_scope: 'month' – tylko ten miesiąc; 'all' – ten i kolejne miesiące (stała kwota)
+create or replace function public.save_budget_item(
+  p_club uuid, p_period text, p_id uuid, p_name text, p_amount numeric, p_scope text default 'all'
+)
+returns uuid language plpgsql volatile security definer set search_path = public as $$
+declare
+  v_row  public.club_budget_items%rowtype;
+  v_def  uuid;
+  v_id   uuid;
+  v_name text := left(trim(coalesce(p_name, '')), 60);
+  v_amt  numeric := round(p_amount, 2);
+begin
+  perform public._require_finance(p_club);
+  if p_period !~ '^[0-9]{4}-(0[1-9]|1[0-2])$' then raise exception 'Nieprawidłowy miesiąc.'; end if;
+  if v_name = '' then raise exception 'Podaj nazwę kosztu (np. Sala).'; end if;
+  if v_amt is null or v_amt <= 0 then raise exception 'Kwota musi być większa od zera.'; end if;
+  if p_scope not in ('month', 'all') then raise exception 'Nieprawidłowy zakres.'; end if;
+
+  if p_id is not null then
+    select * into v_row from public.club_budget_items where id = p_id and club_id = p_club;
+    if not found then raise exception 'Nie znaleziono pozycji.'; end if;
+  end if;
+
+  if p_scope = 'month' then
+    perform public._budget_materialize(p_club, p_period);
+    if p_id is null then
+      insert into public.club_budget_items (club_id, name, amount, sort, period)
+      values (p_club, v_name, v_amt,
+              coalesce((select max(sort) + 1 from public.club_budget_items where club_id = p_club and period = p_period), 0),
+              p_period)
+      returning id into v_id;
+    else
+      update public.club_budget_items set name = v_name, amount = v_amt
+      where club_id = p_club and period = p_period and (id = p_id or base_id = p_id)
+      returning id into v_id;
+      if v_id is null then raise exception 'Nie znaleziono pozycji w tym miesiącu.'; end if;
+    end if;
+    return v_id;
+  end if;
+
+  -- 'all': stała kwota od tego miesiąca
+  perform public._budget_freeze_before(p_club, p_period);
+  if p_id is null then
+    insert into public.club_budget_items (club_id, name, amount, sort, period)
+    values (p_club, v_name, v_amt,
+            coalesce((select max(sort) + 1 from public.club_budget_items where club_id = p_club and period is null), 0), null)
+    returning id into v_def;
+    -- miesiące od bieżącego z własnymi ustawieniami też dostają nową pozycję
+    insert into public.club_budget_items (club_id, name, amount, sort, period, base_id)
+    select p_club, v_name, v_amt, 999, m.period, v_def
+    from public.club_budget_months m where m.club_id = p_club and m.period >= p_period;
+    return v_def;
+  end if;
+
+  if v_row.period is null then
+    v_def := v_row.id;
+  elsif v_row.base_id is not null then
+    v_def := v_row.base_id;
+  else
+    -- pozycja tylko z tego miesiąca staje się stałą
+    insert into public.club_budget_items (club_id, name, amount, sort, period)
+    values (p_club, v_name, v_amt, v_row.sort, null) returning id into v_def;
+    update public.club_budget_items set base_id = v_def where id = v_row.id;
+  end if;
+
+  update public.club_budget_items set name = v_name, amount = v_amt where id = v_def;
+  update public.club_budget_items i set name = v_name, amount = v_amt
+  where i.club_id = p_club and i.base_id = v_def and i.period >= p_period;
+  return v_def;
+end $$;
+
+create or replace function public.delete_budget_item(p_club uuid, p_period text, p_id uuid, p_scope text default 'all')
+returns void language plpgsql volatile security definer set search_path = public as $$
+declare
+  v_row public.club_budget_items%rowtype;
+  v_def uuid;
+begin
+  perform public._require_finance(p_club);
+  select * into v_row from public.club_budget_items where id = p_id and club_id = p_club;
+  if not found then raise exception 'Nie znaleziono pozycji.'; end if;
+
+  if p_scope = 'month' then
+    perform public._budget_materialize(p_club, p_period);
+    delete from public.club_budget_items where club_id = p_club and period = p_period and (id = p_id or base_id = p_id);
+    return;
+  end if;
+
+  perform public._budget_freeze_before(p_club, p_period);
+  v_def := case when v_row.period is null then v_row.id else v_row.base_id end;
+  if v_def is not null then
+    delete from public.club_budget_items where club_id = p_club and base_id = v_def and period >= p_period;
+    delete from public.club_budget_items where id = v_def;
+  end if;
+  if v_row.period is not null then
+    delete from public.club_budget_items where id = v_row.id;
+  end if;
+end $$;
+
+-- Przywróć stałe koszty w miesiącu (usuń ustawienia tylko dla tego miesiąca)
+create or replace function public.reset_budget_month(p_club uuid, p_period text)
+returns void language plpgsql volatile security definer set search_path = public as $$
+begin
+  perform public._require_finance(p_club);
+  delete from public.club_budget_items where club_id = p_club and period = p_period;
+  delete from public.club_budget_months where club_id = p_club and period = p_period;
+end $$;
+
+create or replace function public.set_budget_public(p_club uuid, p_public boolean)
+returns void language plpgsql volatile security definer set search_path = public as $$
+begin
+  perform public._require_owner(p_club);
+  update public.clubs set budget_public = coalesce(p_public, false) where id = p_club;
+end $$;
+
+-- budget_overview: koszty miesiąca (własne albo stałe) + dostęp dla wszystkich, gdy budżet jawny
+do $$
+declare v_def text;
+begin
+  v_def := pg_get_functiondef('public.budget_overview(uuid, text)'::regprocedure);
+  v_def := replace(v_def,
+    'if not (public.is_club_finance(p_club) or public.is_superadmin()) then
+    raise exception ''Budżet widzi tylko Właściciel i Skarbnik klubu.'' using errcode = ''42501'';',
+    'if not public.can_see_budget(p_club) then
+    raise exception ''Budżet klubu jest widoczny tylko dla Właściciela i Skarbnika.'' using errcode = ''42501'';');
+  v_def := replace(v_def,
+    'from public.club_budget_items i where i.club_id = p_club), ''[]''::jsonb),',
+    'from public.club_budget_items i where i.club_id = p_club
+                         and i.period is not distinct from
+                             (case when exists (select 1 from public.club_budget_months bm where bm.club_id = p_club and bm.period = v_period)
+                                   then v_period end)), ''[]''::jsonb),
+    ''items_custom'', exists (select 1 from public.club_budget_months bm where bm.club_id = p_club and bm.period = v_period),
+    ''can_edit'', public.is_club_finance(p_club) or public.is_superadmin(),');
+  if position('can_see_budget' in v_def) = 0 or position('items_custom' in v_def) = 0 then
+    raise exception 'budget_overview: nie udało się podmienić definicji';
+  end if;
+  execute v_def;
+end $$;
+
+-- club_context: flaga budget_public w danych klubu
+do $$
+declare v_def text;
+begin
+  v_def := pg_get_functiondef('public.club_context(uuid)'::regprocedure);
+  if position('budget_public' in v_def) = 0 then
+    v_def := replace(v_def, '''logo_url'', v_club.logo_url', '''logo_url'', v_club.logo_url,
+      ''budget_public'', v_club.budget_public');
+    if position('budget_public' in v_def) = 0 then raise exception 'club_context: nie udało się podmienić'; end if;
+    execute v_def;
+  end if;
+end $$;
+
+revoke all on function public.can_see_budget(uuid) from public, anon;
+revoke all on function public._period_add(text, integer) from public, anon, authenticated;
+revoke all on function public._budget_materialize(uuid, text) from public, anon, authenticated;
+revoke all on function public._budget_freeze_before(uuid, text) from public, anon, authenticated;
+revoke all on function public.save_budget_item(uuid, text, uuid, text, numeric, text) from public, anon;
+revoke all on function public.delete_budget_item(uuid, text, uuid, text) from public, anon;
+revoke all on function public.reset_budget_month(uuid, text) from public, anon;
+revoke all on function public.set_budget_public(uuid, boolean) from public, anon;
+grant execute on function public.can_see_budget(uuid) to authenticated;
+grant execute on function public.save_budget_item(uuid, text, uuid, text, numeric, text) to authenticated;
+grant execute on function public.delete_budget_item(uuid, text, uuid, text) to authenticated;
+grant execute on function public.reset_budget_month(uuid, text) to authenticated;
+grant execute on function public.set_budget_public(uuid, boolean) to authenticated;
+
 -- Harmonogram: 1. dnia miesiąca o 05:00 UTC (06:00 zimą / 07:00 latem w Polsce)
 do $$
 begin
