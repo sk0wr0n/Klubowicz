@@ -18,6 +18,7 @@ interface Row {
   member_id: string;
   user_id: string;
   name: string;
+  full_name: string | null;
   member_code: string | null;
   role: Role;
   avatar_url: string | null;
@@ -85,6 +86,7 @@ export default function TeamPage() {
           member_id: m.member_id,
           user_id: m.user_id,
           name: displayName(m.full_name, mm?.profiles?.nickname),
+          full_name: m.full_name,
           member_code: m.member_code,
           role: m.role,
           avatar_url: mm?.profiles?.avatar_url ?? null,
@@ -99,6 +101,7 @@ export default function TeamPage() {
       member_id: m.id,
       user_id: m.user_id,
       name: displayName(m.profiles?.full_name, m.profiles?.nickname),
+      full_name: m.profiles?.full_name ?? null,
       member_code: m.member_code,
       role: m.role,
       avatar_url: m.profiles?.avatar_url ?? null,
@@ -126,7 +129,7 @@ export default function TeamPage() {
     return rows.filter(
       (m) =>
         (filter === 'all' || (m.balance ?? 0) < 0) &&
-        (!nq || normalize(`${m.name} ${m.member_code ?? ''}`).includes(nq))
+        (!nq || normalize(`${m.name} ${m.full_name ?? ''} ${m.member_code ?? ''}`).includes(nq))
     );
   }, [rows, filter, q]);
 
@@ -213,6 +216,9 @@ export default function TeamPage() {
               <Avatar name={selected.name} url={selected.avatar_url} size="h-20 w-20" />
               <div className="min-w-0">
                 <p className="text-lg font-bold leading-tight">{selected.name}</p>
+                {selected.full_name && selected.full_name.trim() !== selected.name && (
+                  <p className="text-sm font-medium text-slate-600">{selected.full_name}</p>
+                )}
                 <p className="mt-0.5 text-xs text-slate-500">
                   {ROLE_LABEL[selected.role]}
                   {selected.member_code && ` · ${selected.member_code}`}

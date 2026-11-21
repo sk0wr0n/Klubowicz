@@ -102,11 +102,8 @@ export function daysUntil(d: string): number {
 
 /** „Jan „Kowal” Kowalski” – ksywka wstawiona między imię a nazwisko */
 export function displayName(full: string | null | undefined, nick?: string | null): string {
-  const f = (full ?? '').trim();
+  // ksywka (jeśli jest) zamiast imienia i nazwiska – pełne dane widać w profilu zawodnika
   const n = (nick ?? '').trim();
-  if (!n) return f || 'Członek klubu';
-  if (!f) return n;
-  const parts = f.split(/\s+/);
-  if (parts.length < 2) return `${f} „${n}”`;
-  return `${parts[0]} „${n}” ${parts.slice(1).join(' ')}`;
+  if (n) return n;
+  return (full ?? '').trim() || 'Członek klubu';
 }

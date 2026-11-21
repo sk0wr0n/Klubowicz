@@ -247,6 +247,7 @@ function AccountInner() {
             </label>
             <div className="min-w-0">
               <p className="truncate font-semibold">{displayName(name || profile?.full_name, nick)}</p>
+              {nick.trim() && <p className="truncate text-sm text-slate-600">{name || profile?.full_name}</p>}
               <p className="truncate text-sm text-slate-500">{email}</p>
               {profile?.avatar_url ? (
                 <button type="button" className="mt-1 text-xs font-medium text-red-600" onClick={() => void removePhoto()}>
