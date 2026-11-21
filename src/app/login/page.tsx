@@ -81,7 +81,7 @@ export default function LoginPage() {
       type: 'email',
     });
     setBusy(false);
-    if (error) setError('Nieprawidłowy lub wygasły kod. Spróbuj ponownie lub wyślij nowy link.');
+    if (error) setError('Nieprawidłowy lub wygasły kod. Sprawdź, czy to kod z najnowszej wiadomości, albo wyślij nowy.');
   }
 
   return (
@@ -105,7 +105,7 @@ export default function LoginPage() {
                   <GoogleIcon /> Zaloguj przez Google
                 </button>
                 <div className="flex items-center gap-3 text-xs text-slate-400">
-                  <span className="h-px flex-1 bg-slate-200" /> lub link na e-mail{' '}
+                  <span className="h-px flex-1 bg-slate-200" /> lub kod na e-mail{' '}
                   <span className="h-px flex-1 bg-slate-200" />
                 </div>
               </>
@@ -128,20 +128,17 @@ export default function LoginPage() {
                 />
               </div>
               <button className="btn btn-primary w-full py-3" disabled={busy || !email}>
-                {busy ? <Spinner className="h-4 w-4" /> : <Mail className="h-4 w-4" />} Wyślij link logowania
+                {busy ? <Spinner className="h-4 w-4" /> : <Mail className="h-4 w-4" />} Wyślij kod na e-mail
               </button>
             </form>
           </>
         ) : (
           <>
             <div className="rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-              Wysłaliśmy wiadomość na <strong>{email}</strong>. Kliknij link w e-mailu, aby się zalogować. Jeśli prosisz
-              o link kilka razy, działa tylko <strong>najnowszy</strong>. Sprawdź też folder Spam.
+              Wysłaliśmy kod na <strong>{email}</strong>. Skopiuj go z wiadomości i wpisz poniżej – zalogujesz się tutaj, także
+              w aplikacji na ekranie głównym telefonu. Jeśli prosisz o kod kilka razy, działa tylko <strong>najnowszy</strong>.
+              Sprawdź też folder Spam.
             </div>
-            <p className="text-xs text-slate-500">
-              Korzystasz z aplikacji dodanej do ekranu głównego telefonu? Link otworzy się w przeglądarce – wtedy wpisz
-              tutaj kod z tej samej wiadomości, aby zalogować się w aplikacji.
-            </p>
             <form onSubmit={verifyCode} className="flex flex-col gap-3">
               <div>
                 <label className="label" htmlFor="code">
@@ -152,6 +149,7 @@ export default function LoginPage() {
                   className="input text-center text-lg tracking-[0.4em]"
                   inputMode="numeric"
                   autoComplete="one-time-code"
+                  autoFocus
                   maxLength={10}
                   placeholder="123456"
                   value={code}
@@ -163,8 +161,11 @@ export default function LoginPage() {
               </button>
             </form>
             <button className="btn btn-ghost" onClick={() => { setSent(false); setCode(''); }}>
-              Zmień adres / wyślij ponownie
+              Zmień adres / wyślij nowy kod
             </button>
+            <p className="text-center text-[11px] text-slate-400">
+              Jeśli w wiadomości jest też link – możesz go kliknąć, ale otworzy się w przeglądarce, nie w aplikacji.
+            </p>
           </>
         )}
       </div>
@@ -174,7 +175,7 @@ export default function LoginPage() {
       </button>
 
       <p className="text-center text-xs text-slate-400">
-        Nie przechowujemy haseł. Logowanie odbywa się jednorazowym linkiem wysyłanym na e-mail.
+        Nie przechowujemy haseł. Logowanie odbywa się jednorazowym kodem wysyłanym na e-mail.
       </p>
     </main>
   );
