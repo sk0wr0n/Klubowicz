@@ -20,6 +20,7 @@ export interface Profile {
   avatar_url: string | null;
   is_superadmin: boolean;
   email_notifications?: boolean;
+  nickname?: string | null;
 }
 
 export interface Membership {
@@ -86,7 +87,7 @@ export interface ClubMemberRow {
   member_code: string | null;
   position?: string | null;
   positions?: string[] | null;
-  profiles: { full_name: string | null; avatar_url: string | null } | null;
+  profiles: { full_name: string | null; avatar_url: string | null; nickname?: string | null } | null;
 }
 
 export interface SignupLite {

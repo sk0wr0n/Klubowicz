@@ -3,7 +3,9 @@
 import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Bell, LogOut, Save, Shirt } from 'lucide-react';
+import { ArrowLeft, Bell, Camera, LogOut, Save, Shirt } from 'lucide-react';
+import { toSquarePng } from '@/lib/image';
+import { displayName } from '@/lib/format';
 import { POSITION_LABEL, isPosition, type Position } from '@/lib/positions';
 import { PositionMultiPicker } from '@/components/Position';
 import { useAuth, useRequireAuth } from '@/lib/auth';
@@ -134,10 +136,15 @@ function AccountInner() {
   const toast = useToast();
   const { profile, profileLoaded, email, userId, refreshProfile, signOut } = useAuth();
   const [name, setName] = useState('');
+  const [nick, setNick] = useState('');
   const [busy, setBusy] = useState(false);
+  const [photoBusy, setPhotoBusy] = useState(false);
 
   useEffect(() => {
-    if (profileLoaded) setName(profile?.full_name ?? '');
+    if (profileLoaded) {
+      setName(profile?.full_name ?? '');
+      setNick(profile?.nickname ?? '');
+    }
   }, [profileLoaded, profile]);
 
   // Ekran „Uzupełnij profil” tylko wtedy, gdy naprawdę brakuje imienia i nazwiska
@@ -155,7 +162,11 @@ function AccountInner() {
       return;
     }
     setBusy(true);
-    const { error } = await supabase().from('profiles').update({ full_name: v }).eq('id', userId!);
+    const n = nick.trim().replace(/\s+/g, ' ').slice(0, 30);
+    const { error } = await supabase()
+      .from('profiles')
+      .update({ full_name: v, nickname: n || null })
+      .eq('id', userId!);
     setBusy(false);
     if (error) {
       toast(errMsg(error), 'error');
@@ -164,6 +175,42 @@ function AccountInner() {
     await refreshProfile();
     toast('Zapisano profil.');
     router.replace('/');
+  }
+
+  async function uploadPhoto(file: File) {
+    if (!file.type.startsWith('image/')) {
+      toast('Wybierz zdjęcie (PNG, JPG).', 'error');
+      return;
+    }
+    setPhotoBusy(true);
+    try {
+      const blob = await toSquarePng(file, 320);
+      const path = `${userId}/avatar-${Date.now()}.png`;
+      const sb = supabase();
+      const { error: upErr } = await sb.storage.from('avatars').upload(path, blob, {
+        contentType: 'image/png',
+        cacheControl: '31536000',
+        upsert: false,
+      });
+      if (upErr) throw upErr;
+      const { data } = sb.storage.from('avatars').getPublicUrl(path);
+      const { error } = await sb.from('profiles').update({ avatar_url: data.publicUrl }).eq('id', userId!);
+      if (error) throw error;
+      await refreshProfile();
+      toast('Zapisano zdjęcie.');
+    } catch (e) {
+      toast(errMsg(e), 'error');
+    } finally {
+      setPhotoBusy(false);
+    }
+  }
+
+  async function removePhoto() {
+    setPhotoBusy(true);
+    const { error } = await supabase().from('profiles').update({ avatar_url: null }).eq('id', userId!);
+    setPhotoBusy(false);
+    if (error) toast(errMsg(error), 'error');
+    else await refreshProfile();
   }
 
   return (
@@ -180,11 +227,34 @@ function AccountInner() {
           subtitle={first ? 'Podaj imię i nazwisko – zobaczą je osoby z Twojego klubu na listach treningów.' : undefined}
         />
         <form onSubmit={save} className="card flex flex-col gap-4">
-          <div className="flex items-center gap-3">
-            <Avatar name={name || profile?.full_name} url={profile?.avatar_url} size="h-14 w-14" />
+          <div className="flex items-center gap-4">
+            <label className="relative shrink-0 cursor-pointer" aria-label="Zmień zdjęcie">
+              <Avatar name={name || profile?.full_name} url={profile?.avatar_url} size="h-20 w-20" />
+              <span className="absolute -bottom-1 -right-1 flex h-8 w-8 items-center justify-center rounded-full bg-indigo-600 text-white shadow ring-2 ring-white">
+                {photoBusy ? <Spinner className="h-4 w-4" /> : <Camera className="h-4 w-4" />}
+              </span>
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                className="hidden"
+                disabled={photoBusy}
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  e.target.value = '';
+                  if (f) void uploadPhoto(f);
+                }}
+              />
+            </label>
             <div className="min-w-0">
-              <p className="truncate font-semibold">{name || 'Bez nazwy'}</p>
+              <p className="truncate font-semibold">{displayName(name || profile?.full_name, nick)}</p>
               <p className="truncate text-sm text-slate-500">{email}</p>
+              {profile?.avatar_url ? (
+                <button type="button" className="mt-1 text-xs font-medium text-red-600" onClick={() => void removePhoto()}>
+                  Usuń zdjęcie
+                </button>
+              ) : (
+                <p className="mt-1 text-xs text-slate-400">Stuknij aparat, aby dodać zdjęcie</p>
+              )}
             </div>
           </div>
           <div>
@@ -201,6 +271,22 @@ function AccountInner() {
               onChange={(e) => setName(e.target.value)}
             />
           </div>
+          {!first && (
+            <div>
+              <label className="label" htmlFor="nick">
+                Ksywka (opcjonalnie)
+              </label>
+              <input
+                id="nick"
+                className="input"
+                maxLength={30}
+                placeholder="np. Kowal"
+                value={nick}
+                onChange={(e) => setNick(e.target.value)}
+              />
+              <p className="mt-1 text-xs text-slate-500">Pokaże się przy Twoim nazwisku na listach, np. „Jan „Kowal” Kowalski”.</p>
+            </div>
+          )}
           <button className="btn btn-primary" disabled={busy}>
             {busy ? <Spinner className="h-4 w-4" /> : <Save className="h-4 w-4" />} Zapisz
           </button>

@@ -3238,6 +3238,107 @@ begin
   return v;
 end $$;
 
+-- Ksywka i zdjęcie zawodnika + publiczny profil (bez finansów) widoczny dla członków klubu
+alter table public.profiles add column if not exists nickname text
+  check (nickname is null or char_length(nickname) between 1 and 30);
+grant select (nickname) on public.profiles to authenticated;
+grant update (nickname) on public.profiles to authenticated;
+
+alter table public.profiles drop constraint if exists profiles_avatar_url_check;
+alter table public.profiles add constraint profiles_avatar_url_check
+  check (avatar_url is null or avatar_url ~* '^https://');
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('avatars', 'avatars', true, 2097152, array['image/png', 'image/jpeg', 'image/webp'])
+on conflict (id) do update set public = true, file_size_limit = excluded.file_size_limit, allowed_mime_types = excluded.allowed_mime_types;
+
+drop policy if exists avatars_select on storage.objects;
+create policy avatars_select on storage.objects for select to authenticated
+  using (bucket_id = 'avatars' and (storage.foldername(name))[1] = auth.uid()::text);
+drop policy if exists avatars_insert on storage.objects;
+create policy avatars_insert on storage.objects for insert to authenticated
+  with check (bucket_id = 'avatars' and (storage.foldername(name))[1] = auth.uid()::text);
+drop policy if exists avatars_update on storage.objects;
+create policy avatars_update on storage.objects for update to authenticated
+  using (bucket_id = 'avatars' and (storage.foldername(name))[1] = auth.uid()::text);
+drop policy if exists avatars_delete on storage.objects;
+create policy avatars_delete on storage.objects for delete to authenticated
+  using (bucket_id = 'avatars' and (storage.foldername(name))[1] = auth.uid()::text);
+
+-- Profil zawodnika dla członków klubu: dane, pozycje i statystyki (rok bieżący i od początku). Bez finansów.
+create or replace function public.member_public_profile(p_club uuid, p_user uuid)
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare
+  v_uid  uuid := public._require_uid();
+  v_year timestamptz := date_trunc('year', now() at time zone 'Europe/Warsaw') at time zone 'Europe/Warsaw';
+  m      record;
+  v      jsonb;
+begin
+  if not (public.is_club_member(p_club) or public.is_superadmin()) then
+    raise exception 'Nie masz dostępu do tego klubu.' using errcode = '42501';
+  end if;
+  select cm.role, cm.position, cm.positions, cm.member_code, cm.joined_at, p.full_name, p.nickname, p.avatar_url
+    into m
+  from public.club_members cm join public.profiles p on p.id = cm.user_id
+  where cm.club_id = p_club and cm.user_id = p_user and cm.status = 'active';
+  if not found then raise exception 'Nie znaleziono zawodnika.'; end if;
+
+  with pres as (
+    select t.starts_at, coalesce(s.has_car, false) as car, coalesce(s.wants_beer, false) as beer
+    from public.training_attendance a
+    join public.trainings t on t.id = a.training_id
+    left join public.training_signups s on s.training_id = a.training_id and s.user_id = a.user_id
+    where a.club_id = p_club and a.user_id = p_user and a.present
+  ),
+  mvp as (
+    select v.training_id, t.starts_at, v.candidate_id, count(*) n
+    from public.training_mvp_votes v join public.trainings t on t.id = v.training_id
+    where v.club_id = p_club and t.status <> 'cancelled'
+      and public._mvp_eligible(v.training_id, v.candidate_id) and public._mvp_eligible(v.training_id, v.voter_id)
+    group by v.training_id, t.starts_at, v.candidate_id
+  ),
+  mvp_w as (select x.starts_at from mvp x
+            where x.candidate_id = p_user and x.n = (select max(y.n) from mvp y where y.training_id = x.training_id)),
+  coach as (
+    select v.training_id, t.starts_at, v.candidate_id, count(*) n
+    from public.training_coach_votes v join public.trainings t on t.id = v.training_id
+    join public.training_signups c on c.training_id = v.training_id and c.user_id = v.candidate_id and c.status = 'main'
+    join public.training_signups s on s.training_id = v.training_id and s.user_id = v.voter_id and s.status in ('main', 'reserve')
+    where v.club_id = p_club and t.status <> 'cancelled' and t.starts_at <= now()
+    group by v.training_id, t.starts_at, v.candidate_id
+  ),
+  coach_w as (select x.starts_at from coach x
+              where x.candidate_id = p_user and x.n = (select max(y.n) from coach y where y.training_id = x.training_id)),
+  tours as (
+    select t.starts_on from public.tournament_signups ts join public.tournaments t on t.id = ts.tournament_id
+    where ts.club_id = p_club and ts.user_id = p_user and t.starts_on <= current_date
+  )
+  select jsonb_build_object(
+    'user_id', p_user,
+    'full_name', m.full_name, 'nickname', m.nickname, 'avatar_url', m.avatar_url,
+    'role', m.role, 'position', m.position, 'positions', m.positions,
+    'member_code', m.member_code, 'joined_at', m.joined_at,
+    'year', jsonb_build_object(
+      'visits', (select count(*) from pres where starts_at >= v_year),
+      'cars', (select count(*) from pres where starts_at >= v_year and car),
+      'beers', (select count(*) from pres where starts_at >= v_year and beer),
+      'mvp', (select count(*) from mvp_w where starts_at >= v_year),
+      'coach', (select count(*) from coach_w where starts_at >= v_year),
+      'tournaments', (select count(*) from tours where starts_on >= v_year::date)),
+    'all', jsonb_build_object(
+      'visits', (select count(*) from pres),
+      'cars', (select count(*) from pres where car),
+      'beers', (select count(*) from pres where beer),
+      'mvp', (select count(*) from mvp_w),
+      'coach', (select count(*) from coach_w),
+      'tournaments', (select count(*) from tours)),
+    'last_present_at', (select max(starts_at) from pres)
+  ) into v;
+  return v;
+end $$;
+revoke all on function public.member_public_profile(uuid, uuid) from public, anon;
+grant execute on function public.member_public_profile(uuid, uuid) to authenticated;
+
 -- Harmonogram: 1. dnia miesiąca o 05:00 UTC (06:00 zimą / 07:00 latem w Polsce)
 do $$
 begin

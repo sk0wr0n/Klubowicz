@@ -8,6 +8,7 @@ import { useRequireAuth } from '@/lib/auth';
 import { ClubContext, type ClubState } from '@/lib/club';
 import { errMsg, supabase } from '@/lib/supabase';
 import { clubHref, setLastClub } from '@/lib/nav';
+import { displayName } from '@/lib/format';
 import type { ClubContextData, ClubMemberRow } from '@/lib/types';
 import AppHeader from './AppHeader';
 import SubscriptionBanner from './SubscriptionBanner';
@@ -45,7 +46,7 @@ export default function ClubShell({ children }: { children: ReactNode }) {
     if (!clubId) return;
     const { data } = await supabase()
       .from('club_members')
-      .select('id, user_id, role, status, billing_mode, member_code, position, positions, profiles(full_name, avatar_url)')
+      .select('id, user_id, role, status, billing_mode, member_code, position, positions, profiles(full_name, avatar_url, nickname)')
       .eq('club_id', clubId)
       .eq('status', 'active');
     const rows = ((data ?? []) as unknown as ClubMemberRow[]).sort((a, b) =>
@@ -80,7 +81,7 @@ export default function ClubShell({ children }: { children: ReactNode }) {
       suspended: ctx.subscription_status === 'suspended',
       reload,
       reloadMembers,
-      nameOf: (uid: string) => memberMap[uid]?.profiles?.full_name ?? 'Członek klubu',
+      nameOf: (uid: string) => displayName(memberMap[uid]?.profiles?.full_name, memberMap[uid]?.profiles?.nickname),
     };
   }, [ctx, members, clubId, reload, reloadMembers]);
 
@@ -113,7 +114,7 @@ export default function ClubShell({ children }: { children: ReactNode }) {
 
   const nav = [
     { href: clubHref(clubId), match: '/club/', label: 'Zapisy', icon: CalendarDays, show: true },
-    { href: clubHref(clubId, 'team'), match: '/club/team/', label: 'Zespół', icon: Users, show: value.isStaff },
+    { href: clubHref(clubId, 'team'), match: '/club/team/', label: 'Zespół', icon: Users, show: true },
     { href: clubHref(clubId, 'stats'), match: '/club/stats/', label: 'Statystyki', icon: Trophy, show: true },
     { href: clubHref(clubId, 'finance'), match: '/club/finance/', label: 'Finanse', icon: Wallet, show: true },
     { href: clubHref(clubId, 'admin'), match: '/club/admin/', label: 'Zarządzanie', icon: Settings, show: value.isOwner || value.isFinance },
