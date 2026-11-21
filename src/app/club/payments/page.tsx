@@ -73,7 +73,7 @@ export default function PaymentsPage() {
       toast(
         n > 0
           ? `Naliczono składkę za ${periodLabel(period)}: ${n} os. × ${money(ctx.club.monthly_fee_amount)}.`
-          : `Składka za ${periodLabel(period)} była już naliczona wszystkim abonentom.`,
+          : `Składka za ${periodLabel(period)} była już naliczona wszystkim osobom ze składką miesięczną.`,
         n > 0 ? 'success' : 'info'
       );
       await load();
@@ -137,7 +137,7 @@ export default function PaymentsPage() {
             <CalendarDays className="h-5 w-5 text-indigo-600" /> Składki miesięczne
           </h2>
           <p className="text-xs text-slate-500">
-            Abonentów: {monthlyCount} · stawka {money(ctx.club.monthly_fee_amount)}. Ponowne naliczenie tego samego
+            Osób ze składką miesięczną: {monthlyCount} · stawka {money(ctx.club.monthly_fee_amount)}. Ponowne naliczenie tego samego
             miesiąca jest zablokowane.
           </p>
           <input type="month" className="input" value={period} onChange={(e) => setPeriod(e.target.value)} />
@@ -186,7 +186,7 @@ export default function PaymentsPage() {
                       {m.status === 'removed' && <span className="ml-1 text-xs text-slate-400">(były)</span>}
                     </span>
                     <span className="block text-xs text-slate-500">
-                      {m.member_code} · {m.billing_mode === 'monthly' ? 'abonament' : 'za trening'}
+                      {m.member_code} · {m.billing_mode === 'monthly' ? 'składka mies.' : 'za trening'}
                     </span>
                   </span>
                   <span className={`text-sm font-semibold ${Number(m.balance) < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
@@ -206,7 +206,7 @@ export default function PaymentsPage() {
         title="Naliczyć składki?"
         message={
           <>
-            Każdy aktywny zawodnik w trybie abonamentu ({monthlyCount} os.) zostanie obciążony kwotą{' '}
+            Każdy aktywny zawodnik ze składką miesięczną za wynajem sali ({monthlyCount} os.) zostanie obciążony kwotą{' '}
             <strong>{money(ctx.club.monthly_fee_amount)}</strong> za <strong>{period && periodLabel(period)}</strong>.
             Osoby, którym składka za ten miesiąc została już naliczona, zostaną pominięte.
           </>

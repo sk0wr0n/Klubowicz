@@ -52,7 +52,7 @@ export default function MemberPicker({
                 <span className="flex-1">
                   <span className="block text-sm font-medium">{m.profiles?.full_name ?? 'Bez nazwy'}</span>
                   <span className="block text-xs text-slate-500">
-                    {m.member_code} · {m.billing_mode === 'per_session' ? 'płatność za trening' : 'abonament'}
+                    {m.member_code} · {m.billing_mode === 'per_session' ? 'płatność za trening' : 'składka miesięczna'}
                   </span>
                 </span>
                 <PositionBadge position={m.position} />

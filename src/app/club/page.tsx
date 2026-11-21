@@ -104,7 +104,7 @@ export default function TrainingsPage() {
           ctx.my_billing_mode === 'per_session'
             ? `Płacisz za trening: ${ctx.club.single_training_fee_amount} zł`
             : ctx.my_billing_mode === 'monthly'
-              ? 'Masz abonament miesięczny'
+              ? 'Płacisz miesięczną składkę za wynajem sali'
               : undefined
         }
         action={

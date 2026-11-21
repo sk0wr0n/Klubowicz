@@ -15,7 +15,7 @@ export interface BillingChange {
   changed_at: string;
 }
 
-const SHORT: Record<BillingMode, string> = { monthly: 'Abonament', per_session: 'Za trening' };
+const SHORT: Record<BillingMode, string> = { monthly: 'Składka miesięczna', per_session: 'Za trening' };
 
 /** Historia zmian trybu rozliczeń wybranego członka. */
 export default function BillingModeHistory({

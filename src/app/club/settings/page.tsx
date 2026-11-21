@@ -86,7 +86,7 @@ export default function SettingsPage() {
           <h2 className="font-semibold">Stawki i zasady</h2>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="label">Składka miesięczna (zł)</label>
+              <label className="label">Składka miesięczna – wynajem sali (zł)</label>
               <input className="input" inputMode="decimal" value={monthly} onChange={(e) => setMonthly(e.target.value)} />
             </div>
             <div>

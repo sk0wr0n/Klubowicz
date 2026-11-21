@@ -189,13 +189,13 @@ export const ROLE_LABEL: Record<Role, string> = {
 };
 
 export const BILLING_LABEL: Record<BillingMode, string> = {
-  monthly: 'Abonament miesięczny',
+  monthly: 'Składka miesięczna (wynajem sali)',
   per_session: 'Płatność za trening',
 };
 
 export const TX_LABEL: Record<TxType, string> = {
   payment: 'Wpłata',
-  monthly_fee: 'Składka miesięczna',
+  monthly_fee: 'Składka za wynajem sali',
   session_fee: 'Opłata za trening',
   late_cancel_fee: 'Późne wypisanie',
   adjustment: 'Korekta',

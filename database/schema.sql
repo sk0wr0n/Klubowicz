@@ -1341,7 +1341,7 @@ begin
     end if;
     insert into public.transactions (club_id, user_id, amount, type, description, period, booked_at, created_by)
     select c.id, m.user_id, -c.monthly_fee_amount, 'monthly_fee',
-           'Składka miesięczna ' || substr(v_period, 6, 2) || '/' || substr(v_period, 1, 4),
+           'Składka za wynajem sali gimnastycznej ' || substr(v_period, 6, 2) || '/' || substr(v_period, 1, 4),
            v_period, to_date(v_period || '-01', 'YYYY-MM-DD'), null
     from public.club_members m
     where m.club_id = c.id and m.status = 'active' and m.billing_mode = 'monthly'
@@ -1372,7 +1372,7 @@ begin
 
   insert into public.transactions (club_id, user_id, amount, type, description, period, booked_at, created_by)
   select p_club, m.user_id, -v_fee, 'monthly_fee',
-         'Składka miesięczna ' || substr(p_period, 6, 2) || '/' || substr(p_period, 1, 4),
+         'Składka za wynajem sali gimnastycznej ' || substr(p_period, 6, 2) || '/' || substr(p_period, 1, 4),
          p_period, to_date(p_period || '-01', 'YYYY-MM-DD'), v_uid
   from public.club_members m
   where m.club_id = p_club and m.status = 'active' and m.billing_mode = 'monthly'

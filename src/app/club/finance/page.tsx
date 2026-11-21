@@ -57,7 +57,7 @@ export default function FinancePage() {
 
   const balance = Math.round(items.reduce((s, t) => s + Number(t.amount), 0) * 100) / 100;
   const due = balance < 0 ? -balance : 0;
-  const transferTitle = `${ctx.my_member_code ?? ctx.club.prefix} ${profile?.full_name ?? ''}`.trim();
+  const transferTitle = `${`${ctx.my_member_code ?? ctx.club.prefix} ${profile?.full_name ?? ''}`.trim()} - składka za wynajem sali gimnastycznej`;
 
   return (
     <>
@@ -83,7 +83,7 @@ export default function FinancePage() {
             {(
               [
                 { key: 'per_session', icon: Ticket, title: 'Za trening', price: `${money(ctx.club.single_training_fee_amount)} / trening` },
-                { key: 'monthly', icon: CalendarDays, title: 'Abonament', price: `${money(ctx.club.monthly_fee_amount)} / mies.` },
+                { key: 'monthly', icon: CalendarDays, title: 'Składka miesięczna', price: `${money(ctx.club.monthly_fee_amount)} / mies.` },
               ] as { key: BillingMode; icon: typeof Ticket; title: string; price: string }[]
             ).map((o) => {
               const Icon = o.icon;
@@ -145,8 +145,9 @@ export default function FinancePage() {
         message={
           switchTo === 'monthly' ? (
             <>
-              Przechodzisz na <strong>abonament miesięczny</strong> ({money(ctx.club.monthly_fee_amount)} / mies.). Treningi nie
-              będą już osobno obciążać Twojego salda, a składka będzie naliczana co miesiąc. Zmiana działa od razu i zostanie
+              Przechodzisz na <strong>miesięczną składkę za wynajem sali gimnastycznej</strong> (
+              {money(ctx.club.monthly_fee_amount)} / mies.). Treningi nie będą już osobno obciążać Twojego salda, a składka
+              będzie naliczana 1. dnia każdego miesiąca. Zmiana działa od razu i zostanie
               zapisana w historii.
             </>
           ) : (

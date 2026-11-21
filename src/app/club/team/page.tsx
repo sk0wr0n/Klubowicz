@@ -97,7 +97,7 @@ export default function TeamPage() {
                       </span>
                       <span className="mt-0.5 flex flex-wrap items-center gap-1 text-[11px] text-slate-500">
                         <span className={`chip ${m.billing_mode === 'monthly' ? 'bg-violet-100 text-violet-700' : 'bg-slate-100 text-slate-600'}`}>
-                          {m.billing_mode === 'monthly' ? 'abonament' : 'za trening'}
+                          {m.billing_mode === 'monthly' ? 'składka mies.' : 'za trening'}
                         </span>
                         <PositionBadge position={memberMap[m.user_id]?.position} full />
                         {m.role !== 'member' && <span className="chip bg-sky-100 text-sky-700">{ROLE_LABEL[m.role]}</span>}
@@ -135,7 +135,7 @@ export default function TeamPage() {
               </div>
             </div>
             <p className="mb-1 text-xs text-slate-500">
-              {selected.member_code} · {selected.billing_mode === 'monthly' ? 'abonament miesięczny' : 'płatność za trening'}
+              {selected.member_code} · {selected.billing_mode === 'monthly' ? 'składka miesięczna (wynajem sali)' : 'płatność za trening'}
             </p>
             {history === null ? <Spinner className="mx-auto my-6 h-6 w-6" /> : <TransactionList items={history} />}
           </>

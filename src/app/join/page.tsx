@@ -164,9 +164,9 @@ export default function JoinPage() {
     {
       key: 'monthly',
       icon: CalendarDays,
-      title: 'Abonament miesięczny',
+      title: 'Składka miesięczna',
       price: `${money(info.monthly_fee_amount)} / miesiąc`,
-      desc: 'Stała opłata co miesiąc – treningi bez dodatkowych opłat.',
+      desc: 'Stała miesięczna składka za wynajem sali gimnastycznej – treningi bez dodatkowych opłat.',
     },
   ];
 

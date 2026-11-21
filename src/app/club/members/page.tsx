@@ -126,7 +126,7 @@ export default function MembersPage() {
                       {ROLE_LABEL[m.role]}
                     </span>
                     <span className="chip bg-slate-100 text-slate-600">
-                      {m.billing_mode === 'monthly' ? 'abonament' : 'za trening'}
+                      {m.billing_mode === 'monthly' ? 'składka mies.' : 'za trening'}
                     </span>
                     <PositionBadge position={memberMap[m.user_id]?.position} />
                   </p>
