@@ -8,6 +8,7 @@ import { useAuth, useRequireAuth } from '@/lib/auth';
 import { clubHref, setLastClub } from '@/lib/nav';
 import { ROLE_LABEL } from '@/lib/types';
 import AppHeader from '@/components/AppHeader';
+import { InstallCard } from '@/components/InstallHelp';
 import { EmptyState, FullScreenLoader, PageTitle } from '@/components/ui';
 
 export default function ClubsPage() {
@@ -60,6 +61,9 @@ export default function ClubsPage() {
           <button className="btn btn-secondary mt-2" onClick={() => void refreshMemberships()}>
             <RefreshCw className="h-4 w-4" /> Sprawdź teraz
           </button>
+          <div className="mt-6 flex w-full justify-center">
+            <InstallCard />
+          </div>
         </main>
       </>
     );

@@ -207,3 +207,27 @@ export function InstallBanner() {
     </div>
   );
 }
+
+/** Karta z zachętą do instalacji (bez zamykania) – np. na ekranie oczekiwania na akceptację. */
+export function InstallCard() {
+  const [show, setShow] = useState(false);
+
+  useEffect(() => {
+    setShow(!isStandalone());
+  }, []);
+
+  if (!show) return null;
+
+  return (
+    <div className="card flex w-full max-w-sm flex-col items-center gap-3 border-indigo-200 bg-indigo-50 text-center">
+      <SquarePlus className="h-8 w-8 text-indigo-600" />
+      <p className="font-semibold text-indigo-900">W międzyczasie dodaj Klubowicza do ekranu głównego</p>
+      <p className="text-sm text-indigo-800">
+        Będziesz mieć ikonkę na telefonie i szybki dostęp do zapisów na treningi – jak w zwykłej aplikacji.
+      </p>
+      <button className="btn btn-primary w-full" onClick={openInstallHelp}>
+        Pokaż, jak to zrobić
+      </button>
+    </div>
+  );
+}
